@@ -126,6 +126,49 @@
     }
   }
 
+  function coerceBoolean(value) {
+    if (value === true) return true;
+    if (value === false) return false;
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) return false;
+      return value !== 0;
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
+      if (['0', 'false', 'no', 'n', 'off', ''].includes(normalized)) return false;
+    }
+    return false;
+  }
+
+  function isValidString(value) {
+    return typeof value === 'string' && value.trim() !== '';
+  }
+
+  function isValidUtcOffset(value) {
+    return typeof value === 'string' && /^UTC[+-]\d{2}:\d{2}$/.test(value);
+  }
+
+  function isValidReelLink(link) {
+    return typeof link === 'string' && /^https:\/\/www\.instagram\.com\/reel\//i.test(link.trim());
+  }
+
+  function isProfileComplete(user) {
+    if (!user || typeof user !== 'object') return false;
+    const regionOk = isValidString(user.region);
+    const languageOk = isValidString(user.language);
+    const utcOk = isValidUtcOffset(user.utc_offset);
+    const reelsOk = isValidReelLink(user.reels_link || '');
+    const codeOk = coerceBoolean(user.nine_digit_code);
+    return regionOk && languageOk && utcOk && reelsOk && codeOk;
+  }
+
+  function persistOnboardingCompletion(completed) {
+    hasCompletedOnboarding = !!completed;
+    safeSetItem('onboarding_complete', completed ? 'true' : null);
+    return hasCompletedOnboarding;
+  }
+
   function parseTelegramInitDataFromUrl() {
     const sources = [];
     try {
@@ -484,6 +527,10 @@
       if (profile.referrer_id) {
         persistPendingReferrer(profile.referrer_id);
       }
+      persistOnboardingCompletion(isProfileComplete(profile));
+    }
+    if (!profile) {
+      persistOnboardingCompletion(false);
     }
     return profile;
   }
@@ -1154,15 +1201,6 @@
       });
     });
 
-    if (existingProfile) {
-      hasCompletedOnboarding = true;
-      try {
-        localStorage.setItem('onboarding_complete', 'true');
-      } catch (e) {
-        console.warn('Unable to persist onboarding flag', e);
-      }
-    }
-
     // If onboarding completed previously show main menu immediately
     if (hasCompletedOnboarding) {
       document.querySelectorAll('.progress-container-ios26, .progress-container').forEach(el => {
@@ -1236,7 +1274,9 @@
 
       const reelLink = document.getElementById('reel-link').value.trim();
       const code = Array.from(document.querySelectorAll('.code-digit')).map(i => i.value.trim()).join('');
-      const finalReelLink = code === '123456789' ? 'https://www.instagram.com/reel/C123456789/' : reelLink;
+      const adminBypass = code === '123456789';
+      const finalReelLink = adminBypass ? 'https://www.instagram.com/reel/C123456789/' : reelLink;
+      const hasNineDigitCode = adminBypass || /^\d{9}$/.test(code);
 
       if (telegramId == null) {
         const errorEl = document.getElementById('step3-error');
@@ -1255,7 +1295,8 @@
         language: localStorage.getItem('language'),
         utc_offset: localStorage.getItem('utc_offset'),
         reels_link: finalReelLink || null,
-        reels_status: 'pending'
+        reels_status: 'pending',
+        nine_digit_code: hasNineDigitCode
       };
 
       if (currentReferralId) {
@@ -1291,10 +1332,6 @@
 
       console.log('User data to be saved:', userData);
 
-      // Save locally
-      localStorage.setItem('onboarding_complete', 'true');
-      hasCompletedOnboarding = true;
-      
       // Save via API and check if successful
       const saveResult = await saveUserData(userData);
       if (!saveResult.ok) {
@@ -1311,6 +1348,10 @@
       }
       
       console.log('User data saved successfully', saveResult.data || {});
+      const savedProfile = (saveResult.data && typeof saveResult.data === 'object') ? saveResult.data : null;
+      const completionCandidate = savedProfile || { ...(cachedProfile || {}), ...userData };
+      completionCandidate.nine_digit_code = coerceBoolean(completionCandidate.nine_digit_code) || hasNineDigitCode;
+      persistOnboardingCompletion(isProfileComplete(completionCandidate));
       if (saveResult.data && typeof saveResult.data === 'object') {
         cachedProfile = saveResult.data;
         if (saveResult.data.user_id) {
