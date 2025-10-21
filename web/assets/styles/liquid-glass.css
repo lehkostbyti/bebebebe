@@ -13,6 +13,113 @@
   --text-tertiary: #C7C7CC;
 }
 
+:root.dark-theme {
+  --primary-color: #0A84FF; /* iOS dark blue */
+  --secondary-color: #FF9F0A;
+  --error-color: #FF453A;
+  --success-color: #32D74B;
+  --background: radial-gradient(1200px 800px at 25% -15%, #05060f 0%, #101225 45%, #05060f 100%);
+  --glass-bg: rgba(28, 28, 36, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.65);
+  --text-primary: #F5F5F7;
+  --text-secondary: #A0A0A8;
+  --text-tertiary: #5E5E64;
+}
+
+body.dark-theme {
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+body.dark-theme header,
+body.dark-theme .glass,
+body.dark-theme .menu-view,
+body.dark-theme .bottom-menu,
+body.dark-theme .tooltip-box,
+body.dark-theme .success-box {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+body.dark-theme .theme-label,
+body.dark-theme .menu-btn,
+body.dark-theme label,
+body.dark-theme p,
+body.dark-theme h1,
+body.dark-theme h2,
+body.dark-theme h3 {
+  color: var(--text-primary);
+}
+
+body.dark-theme .link,
+body.dark-theme a {
+  color: #9AB7FF;
+}
+
+body.dark-theme .link:hover,
+body.dark-theme a:hover {
+  color: #c2d4ff;
+}
+
+body.dark-theme .code-inputs-container {
+  background: rgba(44, 44, 52, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+
+body.dark-theme .code-digit {
+  background: rgba(34, 34, 42, 0.9);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  color: var(--text-primary);
+}
+
+body.dark-theme .input {
+  background: rgba(44, 44, 52, 0.7);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  color: var(--text-primary);
+}
+
+body.dark-theme .input:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+body.dark-theme .input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+}
+
+body.dark-theme .code-digit:focus,
+body.dark-theme .code-digit:hover,
+body.dark-theme .code-digit.valid {
+  background: rgba(52, 52, 60, 0.95);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+}
+
+body.dark-theme .code-digit.invalid {
+  border-color: var(--error-color);
+  background: rgba(60, 34, 34, 0.85);
+}
+
+body.dark-theme .progress-container {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.05);
+}
+
+body.dark-theme .progress-segment {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+body.dark-theme .primary-btn,
+body.dark-theme .secondary-btn,
+body.dark-theme .menu-btn {
+  color: var(--text-primary);
+}
+
 /* Import animations */
 @import url('animations.css');
 

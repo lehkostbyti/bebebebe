@@ -11,11 +11,92 @@
   let currentLanguage = localStorage.getItem('language') || 'en';
   let currentUserId = localStorage.getItem('user_id') || null;
   let hasCompletedOnboarding = localStorage.getItem('onboarding_complete') === 'true';
+  let currentTheme = 'light';
 
-  // Determine API base URL.  If the miniapp is served on port 8000 (e.g. via
-  // a simple static server), assume the API server runs on localhost:3000.
-  // Otherwise, calls are relative to the current origin.
-  const API_BASE = window.location.port === '8000' ? 'http://localhost:3000' : '';
+  function getStoredTheme() {
+    try {
+      return localStorage.getItem('theme') || 'light';
+    } catch (e) {
+      console.warn('Theme storage unavailable', e);
+      return 'light';
+    }
+  }
+
+  function persistTheme(theme) {
+    try {
+      localStorage.setItem('theme', theme);
+    } catch (e) {
+      console.warn('Unable to persist theme preference', e);
+    }
+  }
+
+  function applyTheme(theme) {
+    const targets = [document.documentElement, document.body];
+    targets.forEach(target => {
+      if (!target) return;
+      if (theme === 'dark') {
+        target.classList.add('dark-theme');
+      } else {
+        target.classList.remove('dark-theme');
+      }
+    });
+  }
+
+  currentTheme = getStoredTheme();
+  applyTheme(currentTheme);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => applyTheme(currentTheme));
+  }
+
+  function resolveApiBase() {
+    const globalOverride = typeof window !== 'undefined'
+      ? (window.__API_BASE__ || window.__MINIAPP_API_BASE__)
+      : '';
+    if (typeof globalOverride === 'string' && globalOverride.trim() !== '') {
+      return globalOverride.trim().replace(/\/$/, '');
+    }
+
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      const queryOverride = params.get('apiBase') || params.get('api_base');
+      if (queryOverride && queryOverride.trim()) {
+        return queryOverride.trim().replace(/\/$/, '');
+      }
+    } catch (e) {
+      console.warn('Unable to inspect query parameters for API base', e);
+    }
+
+    const metaTag = document.querySelector('meta[name="api-base"]');
+    if (metaTag && metaTag.content && metaTag.content.trim()) {
+      return metaTag.content.trim().replace(/\/$/, '');
+    }
+
+    const { protocol, hostname, port } = window.location;
+    const desiredPort = '3000';
+
+    const codespacesMatch = hostname.match(/^(.*)-(\d+)\.app\.github\.dev$/);
+    if (codespacesMatch) {
+      const [, prefix, currentPort] = codespacesMatch;
+      if (currentPort !== desiredPort) {
+        return `${protocol}//${prefix}-${desiredPort}.app.github.dev`;
+      }
+      return '';
+    }
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      if (port === desiredPort) return '';
+      return `${protocol}//${hostname}:${desiredPort}`;
+    }
+
+    if (port && port !== desiredPort) {
+      return `${protocol}//${hostname}:${desiredPort}`;
+    }
+
+    return '';
+  }
+
+  const API_BASE = resolveApiBase();
+  console.log('[Miniapp] API base:', API_BASE || '(relative to origin)');
 
   /**
    * Fetch and cache all translation files.
@@ -264,12 +345,33 @@
         body: JSON.stringify(data)
       });
       if (!res.ok) {
-        console.error('Failed to save user data', await res.text());
+        let message = `HTTP ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body && typeof body === 'object' && body.error) {
+            message = body.error;
+          } else if (typeof body === 'string' && body) {
+            message = body;
+          }
+        } catch (_) {
+          try {
+            const text = await res.text();
+            if (text) message = text;
+          } catch (err) {
+            console.warn('Unable to read error response body', err);
+          }
+        }
+        return { ok: false, error: message };
       }
-      return res.ok;
+      let payload = null;
+      try {
+        payload = await res.json();
+      } catch (e) {
+        console.warn('Response did not contain JSON payload', e);
+      }
+      return { ok: true, data: payload };
     } catch (e) {
-      console.error('Error saving user data', e);
-      return false;
+      return { ok: false, error: e.message || 'Network error' };
     }
   }
 
@@ -532,29 +634,18 @@
    */
   function setupThemeSwitch() {
     const themeSwitch = document.getElementById('checkbox');
-    const currentTheme = localStorage.getItem('theme') || 'light';
-    
-    // Check if theme switch element exists
     if (!themeSwitch) {
       console.error('Theme switch element not found!');
       return;
     }
-    
-    // Set initial theme
-    if (currentTheme === 'dark') {
-      themeSwitch.checked = true;
-      document.body.classList.add('dark-theme');
-    }
-    
-    // Add event listener for theme switch
-    themeSwitch.addEventListener('change', function() {
-      if (this.checked) {
-        document.body.classList.add('dark-theme');
-        localStorage.setItem('theme', 'dark');
-      } else {
-        document.body.classList.remove('dark-theme');
-        localStorage.setItem('theme', 'light');
-      }
+
+    themeSwitch.checked = currentTheme === 'dark';
+    applyTheme(currentTheme);
+
+    themeSwitch.addEventListener('change', () => {
+      currentTheme = themeSwitch.checked ? 'dark' : 'light';
+      applyTheme(currentTheme);
+      persistTheme(currentTheme);
     });
   }
 
@@ -717,9 +808,9 @@
       hasCompletedOnboarding = true;
       
       // Save via API and check if successful
-      const saveSuccess = await saveUserData(userData);
-      if (!saveSuccess) {
-        console.error('Failed to save user data to server');
+      const saveResult = await saveUserData(userData);
+      if (!saveResult.ok) {
+        console.error('Failed to save user data to server:', saveResult.error);
         // Показываем сообщение об ошибке
         const errorEl = document.getElementById('step3-error');
         errorEl.textContent = 'Failed to save data. Please try again.';
@@ -731,7 +822,7 @@
         return;
       }
       
-      console.log('User data saved successfully');
+      console.log('User data saved successfully', saveResult.data || {});
       
       // Show success overlay instead of a separate screen.  The overlay
       // appears on top of the current view and hides itself when the
