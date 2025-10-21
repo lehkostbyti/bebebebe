@@ -15,6 +15,10 @@
   let currentReferralId = localStorage.getItem('referral_id') || null;
   let cachedProfile = null;
   let cachedTelegramUser = null;
+  let cachedInitContext = null;
+  let pendingReferrerCode = null;
+  let pendingReferrerLoaded = false;
+  let bootstrapAttempted = false;
 
   function getStoredTheme() {
     try {
@@ -101,18 +105,231 @@
   const API_BASE = resolveApiBase();
   console.log('[Miniapp] API base:', API_BASE || '(relative to origin)');
 
+  function safeSetItem(key, value) {
+    try {
+      if (value == null) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, value);
+      }
+    } catch (e) {
+      console.warn(`Unable to persist ${key}`, e);
+    }
+  }
+
+  function safeGetItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn(`Unable to read ${key} from storage`, e);
+      return null;
+    }
+  }
+
+  function parseTelegramInitDataFromUrl() {
+    const sources = [];
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        if (typeof window.location.search === 'string' && window.location.search.length > 1) {
+          sources.push(window.location.search.slice(1));
+        }
+        if (typeof window.location.hash === 'string' && window.location.hash.length > 1) {
+          const hash = window.location.hash.startsWith('#')
+            ? window.location.hash.slice(1)
+            : window.location.hash;
+          sources.push(hash);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to inspect window location for tgWebAppData', e);
+    }
+
+    for (const source of sources) {
+      try {
+        const outer = new URLSearchParams(source);
+        const raw = outer.get('tgWebAppData') || outer.get('tg_web_app_data');
+        if (!raw) continue;
+        const inner = new URLSearchParams(raw);
+        const userParam = inner.get('user');
+        let user = null;
+        if (userParam) {
+          try {
+            user = JSON.parse(userParam);
+          } catch (err) {
+            console.warn('Unable to parse Telegram user from tgWebAppData', err);
+          }
+        }
+        const startParam = inner.get('start_param') || inner.get('startapp_param') || null;
+        const authDate = inner.get('auth_date') || null;
+        const hash = inner.get('hash') || null;
+        const queryId = inner.get('query_id') || null;
+        const canSendAfterRaw = inner.get('can_send_after');
+        let canSendAfter = null;
+        if (canSendAfterRaw != null && canSendAfterRaw !== '') {
+          const parsed = Number(canSendAfterRaw);
+          if (Number.isFinite(parsed)) canSendAfter = parsed;
+        }
+        return {
+          user,
+          startParam,
+          authDate,
+          hash,
+          queryId,
+          canSendAfter,
+          rawData: raw
+        };
+      } catch (err) {
+        console.warn('Failed to parse tgWebAppData payload', err);
+      }
+    }
+
+    return null;
+  }
+
+  function getTelegramInitContext(forceRefresh = false) {
+    if (!forceRefresh && cachedInitContext) return cachedInitContext;
+    const context = {
+      user: null,
+      startParam: null,
+      authDate: null,
+      hash: null,
+      queryId: null,
+      canSendAfter: null,
+      rawData: null
+    };
+
+    try {
+      if (window.Telegram && Telegram.WebApp) {
+        const unsafe = Telegram.WebApp.initDataUnsafe || {};
+        context.rawData = unsafe;
+        if (unsafe.user) context.user = unsafe.user;
+        if (unsafe.start_param) context.startParam = unsafe.start_param;
+        if (!context.startParam && unsafe.startapp_param) context.startParam = unsafe.startapp_param;
+        if (unsafe.auth_date) context.authDate = unsafe.auth_date;
+        if (unsafe.hash) context.hash = unsafe.hash;
+        if (unsafe.query_id) context.queryId = unsafe.query_id;
+        if (unsafe.can_send_after != null) context.canSendAfter = unsafe.can_send_after;
+      }
+    } catch (e) {
+      console.warn('Failed to access Telegram init data', e);
+    }
+
+    if (!context.user || !context.startParam || context.hash == null) {
+      const fallback = parseTelegramInitDataFromUrl();
+      if (fallback) {
+        if (!context.user && fallback.user) context.user = fallback.user;
+        if (!context.startParam && fallback.startParam) context.startParam = fallback.startParam;
+        if (!context.authDate && fallback.authDate) context.authDate = fallback.authDate;
+        if (!context.hash && fallback.hash) context.hash = fallback.hash;
+        if (!context.queryId && fallback.queryId) context.queryId = fallback.queryId;
+        if (context.canSendAfter == null && fallback.canSendAfter != null) {
+          context.canSendAfter = fallback.canSendAfter;
+        }
+        if (!context.rawData && fallback.rawData) context.rawData = fallback.rawData;
+      }
+    }
+
+    cachedInitContext = context;
+    return context;
+  }
+
+  function getPendingReferrerCode() {
+    if (pendingReferrerLoaded) return pendingReferrerCode;
+    pendingReferrerLoaded = true;
+    try {
+      const stored = localStorage.getItem('referrer_code');
+      pendingReferrerCode = stored && stored.trim() !== '' ? stored.trim() : null;
+    } catch (e) {
+      pendingReferrerCode = null;
+    }
+    return pendingReferrerCode;
+  }
+
+  function persistPendingReferrer(code) {
+    pendingReferrerLoaded = true;
+    const sanitized = code != null && String(code).trim() !== '' ? String(code).trim() : null;
+    pendingReferrerCode = sanitized;
+    try {
+      if (sanitized) {
+        localStorage.setItem('referrer_code', sanitized);
+      } else {
+        localStorage.removeItem('referrer_code');
+      }
+    } catch (e) {
+      console.warn('Unable to persist referrer code', e);
+    }
+    return pendingReferrerCode;
+  }
+
+  function buildTelegramMeta(user) {
+    if (!user || typeof user !== 'object') return null;
+    const meta = {};
+    [
+      'language_code',
+      'is_premium',
+      'is_bot',
+      'is_scam',
+      'is_fake',
+      'is_support',
+      'added_to_attachment_menu',
+      'can_join_groups',
+      'can_read_all_group_messages',
+      'supports_inline_queries',
+      'allows_write_to_pm'
+    ].forEach(key => {
+      if (user[key] !== undefined && user[key] !== null) {
+        meta[key] = user[key];
+      }
+    });
+    return Object.keys(meta).length ? meta : null;
+  }
+
+  function buildTelegramLaunchMeta(context) {
+    const initContext = context || getTelegramInitContext();
+    if (!initContext) return null;
+    const meta = {};
+    if (initContext.startParam) meta.start_param = initContext.startParam;
+    if (initContext.authDate) meta.auth_date = initContext.authDate;
+    if (initContext.hash) meta.hash = initContext.hash;
+    if (initContext.queryId) meta.query_id = initContext.queryId;
+    if (initContext.canSendAfter != null) meta.can_send_after = initContext.canSendAfter;
+    if (initContext.rawData && typeof initContext.rawData === 'object') {
+      const raw = initContext.rawData;
+      if (raw.platform) meta.platform = raw.platform;
+      if (raw.version) meta.version = raw.version;
+      if (raw.chat_type) meta.chat_type = raw.chat_type;
+      if (raw.chat_instance) meta.chat_instance = raw.chat_instance;
+    }
+    return Object.keys(meta).length ? meta : null;
+  }
+
   function captureTelegramUser() {
     if (cachedTelegramUser) return cachedTelegramUser;
+    const initContext = getTelegramInitContext();
+    if (initContext.startParam) {
+      persistPendingReferrer(initContext.startParam);
+    }
+    const user = initContext.user;
+    if (user && user.id != null) {
+      cachedTelegramUser = user;
+      currentTelegramId = user.id;
+      safeSetItem('telegram_id', String(currentTelegramId));
+      if (user.language_code && (!currentLanguage || (currentLanguage === 'en' && !safeGetItem('language')))) {
+        currentLanguage = user.language_code;
+        safeSetItem('language', user.language_code);
+      }
+      return cachedTelegramUser;
+    }
     try {
       if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
         cachedTelegramUser = Telegram.WebApp.initDataUnsafe.user;
         if (cachedTelegramUser && cachedTelegramUser.id != null) {
           currentTelegramId = cachedTelegramUser.id;
-          try {
-            localStorage.setItem('telegram_id', String(currentTelegramId));
-          } catch (e) {
-            console.warn('Unable to persist telegram_id', e);
-          }
+          safeSetItem('telegram_id', String(currentTelegramId));
+        }
+        if (cachedTelegramUser && cachedTelegramUser.language_code && (!currentLanguage || currentLanguage === 'en')) {
+          currentLanguage = cachedTelegramUser.language_code;
+          safeSetItem('language', cachedTelegramUser.language_code);
         }
       }
     } catch (e) {
@@ -149,11 +366,85 @@
     return null;
   }
 
+  function buildBootstrapPayload() {
+    const initContext = getTelegramInitContext();
+    const telegramUser = captureTelegramUser();
+    let telegramId = telegramUser && telegramUser.id != null ? telegramUser.id : null;
+    if (telegramId == null || telegramId === '') {
+      const fallback = safeGetItem('telegram_id');
+      if (fallback != null && fallback !== '') telegramId = fallback;
+    }
+    if (telegramId == null || telegramId === '') return null;
+
+    currentTelegramId = telegramId;
+    safeSetItem('telegram_id', String(telegramId));
+
+    const payload = {
+      telegram_id: telegramId,
+      points_total: 0,
+      points_current: 0,
+      daily_points: 0,
+      referrals: []
+    };
+
+    const identityFields = [
+      ['username', telegramUser && telegramUser.username],
+      ['first_name', telegramUser && telegramUser.first_name],
+      ['last_name', telegramUser && telegramUser.last_name],
+      ['photo_url', telegramUser && telegramUser.photo_url]
+    ];
+    identityFields.forEach(([key, value]) => {
+      if (value != null && value !== '') payload[key] = value;
+    });
+
+    const storedLanguage = safeGetItem('language');
+    if (storedLanguage) {
+      payload.language = storedLanguage;
+    } else if (telegramUser && telegramUser.language_code) {
+      payload.language = telegramUser.language_code;
+    }
+
+    const storedRegion = safeGetItem('region');
+    if (storedRegion) payload.region = storedRegion;
+
+    const storedTz = safeGetItem('utc_offset');
+    if (storedTz) payload.utc_offset = storedTz;
+
+    const referrerCode = getPendingReferrerCode();
+    if (referrerCode) payload.referrer_id = referrerCode;
+
+    const telegramMeta = buildTelegramMeta(telegramUser);
+    if (telegramMeta) payload.telegram_meta = telegramMeta;
+
+    const launchMeta = buildTelegramLaunchMeta(initContext);
+    if (launchMeta) payload.telegram_launch = launchMeta;
+
+    return payload;
+  }
+
   async function ensureProfileData(forceRefresh = false) {
     if (!forceRefresh && cachedProfile) return cachedProfile;
     const telegramId = getTelegramIdForRequest();
     if (!telegramId) return null;
-    const profile = await fetchUserProfile(telegramId);
+    let profile = await fetchUserProfile(telegramId);
+
+    if (!profile) {
+      const shouldAttemptBootstrap = !bootstrapAttempted || forceRefresh;
+      if (shouldAttemptBootstrap) {
+        const bootstrapPayload = buildBootstrapPayload();
+        if (bootstrapPayload) {
+          bootstrapAttempted = true;
+          const bootstrapResult = await saveUserData(bootstrapPayload);
+          if (bootstrapResult.ok && bootstrapResult.data) {
+            profile = bootstrapResult.data;
+          } else {
+            console.warn('Unable to bootstrap Telegram user', bootstrapResult.error);
+            bootstrapAttempted = false;
+          }
+        }
+      }
+    }
+
     if (profile) {
       cachedProfile = profile;
       if (profile.user_id) {
@@ -172,6 +463,10 @@
           console.warn('Unable to persist language', e);
         }
       }
+      if (profile.telegram_id != null) {
+        currentTelegramId = profile.telegram_id;
+        safeSetItem('telegram_id', String(profile.telegram_id));
+      }
       if (profile.region) {
         try {
           localStorage.setItem('region', profile.region);
@@ -185,6 +480,9 @@
         } catch (e) {
           console.warn('Unable to persist utc_offset', e);
         }
+      }
+      if (profile.referrer_id) {
+        persistPendingReferrer(profile.referrer_id);
       }
     }
     return profile;
@@ -821,6 +1119,20 @@
     `;
     document.head.appendChild(style);
     
+    if (window.Telegram && Telegram.WebApp) {
+      try {
+        Telegram.WebApp.ready();
+        if (typeof Telegram.WebApp.expand === 'function') {
+          Telegram.WebApp.expand();
+        }
+      } catch (e) {
+        console.warn('Unable to initialize Telegram WebApp environment', e);
+      }
+    }
+
+    getPendingReferrerCode();
+    getTelegramInitContext(true);
+
     await loadTranslations();
     captureTelegramUser();
     const existingProfile = await ensureProfileData();
@@ -919,6 +1231,7 @@
       const storedProfile = cachedProfile || existingProfile || null;
       const username = (telegramUser && telegramUser.username) || (storedProfile && storedProfile.username) || '';
       const firstName = (telegramUser && telegramUser.first_name) || (storedProfile && storedProfile.first_name) || '';
+      const lastName = (telegramUser && telegramUser.last_name) || (storedProfile && storedProfile.last_name) || '';
       const photoUrl = (telegramUser && telegramUser.photo_url) || (storedProfile && storedProfile.photo_url) || '';
 
       const reelLink = document.getElementById('reel-link').value.trim();
@@ -936,6 +1249,7 @@
         telegram_id: telegramId,
         username,
         first_name: firstName,
+        last_name: lastName,
         photo_url: photoUrl,
         region: localStorage.getItem('region'),
         language: localStorage.getItem('language'),
@@ -955,8 +1269,24 @@
       } else if (Array.isArray(cachedProfile.referrals)) {
         userData.referrals = cachedProfile.referrals;
       }
-      if (cachedProfile && cachedProfile.referrer_id) {
-        userData.referrer_id = cachedProfile.referrer_id;
+      const pendingReferrer = (cachedProfile && cachedProfile.referrer_id) || getPendingReferrerCode();
+      if (pendingReferrer) {
+        userData.referrer_id = pendingReferrer;
+        persistPendingReferrer(pendingReferrer);
+      }
+
+      if (!userData.language && telegramUser && telegramUser.language_code) {
+        userData.language = telegramUser.language_code;
+      }
+
+      const telegramMeta = buildTelegramMeta(telegramUser);
+      if (telegramMeta) {
+        userData.telegram_meta = telegramMeta;
+      }
+
+      const launchMeta = buildTelegramLaunchMeta();
+      if (launchMeta) {
+        userData.telegram_launch = launchMeta;
       }
 
       console.log('User data to be saved:', userData);

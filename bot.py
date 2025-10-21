@@ -12,11 +12,54 @@ production you should use a proper database and secure access control.
 
 import json
 import os
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+
+
+def _ensure_urllib3_appengine_stub() -> None:
+    """Provide a stub for urllib3.contrib.appengine when missing.
+
+    python-telegram-bot v13 expects urllib3<2 which still shipped the
+    ``urllib3.contrib.appengine`` helper.  Newer urllib3 releases removed this
+    module which leads to an ImportError during bot startup.  To keep the bot
+    working without forcing a specific urllib3 version we register a minimal
+    stub that exposes the attributes accessed by python-telegram-bot.
+    """
+
+    try:
+        import urllib3.contrib.appengine  # type: ignore[attr-defined]  # noqa: F401
+        return
+    except ModuleNotFoundError:
+        try:
+            import urllib3  # type: ignore
+            import urllib3.contrib  # type: ignore  # noqa: F401
+        except ModuleNotFoundError:
+            return
+
+    module = ModuleType('appengine')
+
+    class _AppEngineWarning(RuntimeError):
+        """Fallback warning type used when urllib3's original warning is absent."""
+
+    module.AppEnginePlatformWarning = _AppEngineWarning
+    module.is_appengine_sandbox = lambda: False
+    module.is_appengine = lambda: False
+    module.is_local_appengine = lambda: False
+    module.is_prod_appengine = lambda: False
+    module.HaveAppEngine = False
+    module.on_appengine = lambda: False
+    module.monkeypatch = lambda: None
+
+    sys.modules['urllib3.contrib.appengine'] = module
+    urllib3.contrib.appengine = module  # type: ignore[attr-defined]
+
+
+_ensure_urllib3_appengine_stub()
 
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler, Updater
