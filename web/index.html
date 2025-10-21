@@ -76,10 +76,19 @@
         <label for="timezone-select" data-i18n="timezone_label">Time zone (UTC)</label>
         <select id="timezone-select" class="glass input">
           <option value="" disabled selected data-i18n="select_timezone">Select time zone</option>
+          <option value="UTC-10:00">UTC-10:00</option>
+          <option value="UTC-09:00">UTC-09:00</option>
           <option value="UTC-08:00">UTC-08:00</option>
+          <option value="UTC-07:00">UTC-07:00</option>
+          <option value="UTC-06:00">UTC-06:00</option>
           <option value="UTC-05:00">UTC-05:00</option>
+          <option value="UTC-04:00">UTC-04:00</option>
+          <option value="UTC-03:30">UTC-03:30</option>
           <option value="UTC-03:00">UTC-03:00</option>
-          <option value="UTC+00:00">UTC+00:00</option>
+          <option value="UTC-02:30">UTC-02:30</option>
+          <option value="UTC-02:00">UTC-02:00</option>
+          <option value="UTC-01:00">UTC-01:00</option>
+          <option value="UTC+00:00">UTC±00:00</option>
           <option value="UTC+01:00">UTC+01:00</option>
           <option value="UTC+02:00">UTC+02:00</option>
           <option value="UTC+03:00">UTC+03:00</option>
@@ -188,9 +197,23 @@
       </div>
       <!-- Reel card -->
       <div class="profile-block reel-block glass">
-        <p class="reel-title" data-i18n="your_reel_title"></p>
-        <p id="profile-link" class="reel-link"></p>
+        <div class="reel-header">
+          <p class="reel-title" data-i18n="your_reel_title"></p>
+          <button id="edit-reel-link" type="button" class="secondary-btn btn-compact" data-i18n="edit_reel_button"></button>
+        </div>
+        <a id="profile-link" class="reel-link placeholder" href="#" target="_blank" rel="noopener noreferrer">Insert the link to your reel</a>
         <p id="profile-status" class="reel-status"></p>
+        <div id="reel-edit-panel" class="reel-edit-panel hidden">
+          <label for="profile-link-input" data-i18n="reels_link_label"></label>
+          <input type="url" id="profile-link-input" class="glass input" placeholder="https://www.instagram.com/reel/..."
+                 inputmode="url" enterkeyhint="done" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false"
+                 pattern="https://www\.instagram\.com/reel/.+" title="Please enter a valid Instagram Reels link" />
+          <div id="reel-edit-error" class="error hidden"></div>
+          <div class="reel-edit-actions">
+            <button id="cancel-reel-edit" type="button" class="secondary-btn btn-compact" data-i18n="cancel_button"></button>
+            <button id="save-reel-edit" type="button" class="primary-btn btn-compact" data-i18n="save_button"></button>
+          </div>
+        </div>
       </div>
       <!-- Logout button -->
       <button id="logout-btn" class="primary-btn logout-btn" data-i18n="menu_logout">Logout</button>
