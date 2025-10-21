@@ -10,36 +10,92 @@ const PORT = process.env.PORT || 3000;
 
 // ================= Storage (ported style from old_version) =================
 const DATA_DIR = path.join(__dirname, 'user_data');
-const DATA_FILE = path.join(DATA_DIR, 'users.json');
+const PRIMARY_DATA_FILE = path.join(DATA_DIR, 'users.json');
+const LEGACY_DATA_FILE = path.join(DATA_DIR, 'user_data.json');
 
 function ensureStorage() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, '[]', 'utf-8');
+
+  const hasPrimary = fs.existsSync(PRIMARY_DATA_FILE);
+  const hasLegacy = fs.existsSync(LEGACY_DATA_FILE);
+
+  if (!hasPrimary) {
+    if (hasLegacy) {
+      try {
+        fs.copyFileSync(LEGACY_DATA_FILE, PRIMARY_DATA_FILE);
+      } catch (e) {
+        console.error('❌ Failed to copy legacy user_data.json to users.json:', e.message);
+      }
+    }
+    if (!fs.existsSync(PRIMARY_DATA_FILE)) {
+      fs.writeFileSync(PRIMARY_DATA_FILE, '[]', 'utf-8');
+    }
+  }
+
+  if (!fs.existsSync(LEGACY_DATA_FILE)) {
+    try {
+      fs.copyFileSync(PRIMARY_DATA_FILE, LEGACY_DATA_FILE);
+    } catch (e) {
+      console.error('❌ Failed to create legacy user_data.json copy:', e.message);
+    }
+  }
 }
 
-function readUsers() {
+function safeReadArray(filePath) {
   try {
-    ensureStorage();
-    const raw = fs.readFileSync(DATA_FILE, 'utf-8').trim();
+    if (!fs.existsSync(filePath)) return null;
+    const raw = fs.readFileSync(filePath, 'utf-8').trim();
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
-    console.error('❌ readUsers error:', e.message);
-    fs.writeFileSync(DATA_FILE, '[]', 'utf-8');
-    return [];
+    console.error(`❌ Failed to read ${path.basename(filePath)}:`, e.message);
+    return null;
   }
 }
 
-async function writeUsers(users) {
-  try {
-    ensureStorage();
-    const tmp = DATA_FILE + '.tmp';
-    await fsp.writeFile(tmp, JSON.stringify(users, null, 2), 'utf-8');
-    await fsp.rename(tmp, DATA_FILE);
-  } catch (e) {
-    console.error('❌ writeUsers error:', e.message);
+function readUsers() {
+  ensureStorage();
+
+  const primary = safeReadArray(PRIMARY_DATA_FILE);
+  if (primary !== null) {
+    return primary;
   }
+
+  const legacy = safeReadArray(LEGACY_DATA_FILE);
+  if (legacy !== null) {
+    try {
+      const payload = JSON.stringify(legacy, null, 2);
+      fs.writeFileSync(PRIMARY_DATA_FILE, payload, 'utf-8');
+    } catch (e) {
+      console.error('❌ Failed to resync users.json from legacy file:', e.message);
+    }
+    return legacy;
+  }
+
+  console.error('❌ Both users.json and user_data.json are invalid. Resetting storage.');
+  try {
+    fs.writeFileSync(PRIMARY_DATA_FILE, '[]', 'utf-8');
+    fs.writeFileSync(LEGACY_DATA_FILE, '[]', 'utf-8');
+  } catch (e) {
+    console.error('❌ Failed to reset storage files:', e.message);
+  }
+  return [];
+}
+
+async function writeUsers(users) {
+  ensureStorage();
+  const normalized = Array.isArray(users) ? users : [];
+  const payload = JSON.stringify(normalized, null, 2);
+
+  async function writeJsonAtomic(filePath) {
+    const tmp = `${filePath}.tmp`;
+    await fsp.writeFile(tmp, payload, 'utf-8');
+    await fsp.rename(tmp, filePath);
+  }
+
+  await writeJsonAtomic(PRIMARY_DATA_FILE);
+  await writeJsonAtomic(LEGACY_DATA_FILE);
 }
 
 // ================= Helpers =================
@@ -111,7 +167,12 @@ function mergeUser(existing, incoming) {
 }
 
 // ================= Routes =================
-app.get('/', (_req,res)=> res.json({ status: 'ok', service: 'miniapp-api', file: DATA_FILE }));
+app.get('/', (_req,res)=> res.json({
+  status: 'ok',
+  service: 'miniapp-api',
+  file: PRIMARY_DATA_FILE,
+  legacy: LEGACY_DATA_FILE
+}));
 
 // GET /api/users?user_id=..&telegram_id=..
 app.get('/api/users', (req,res)=>{
@@ -135,7 +196,12 @@ app.post('/api/users', async (req,res)=>{
   const idx = users.findIndex(u => String(u.user_id || u.telegram_id) === String(key));
   const merged = mergeUser(idx >= 0 ? users[idx] : null, payload);
   if (idx >= 0) users[idx] = merged; else users.push(merged);
-  await writeUsers(users);
+  try {
+    await writeUsers(users);
+  } catch (e) {
+    console.error('❌ Persist error on POST /api/users:', e.message);
+    return res.status(500).json({ error: 'Failed to save user data' });
+  }
   res.json(merged);
 });
 
@@ -149,7 +215,12 @@ app.put('/api/users/:id/status', async (req,res)=>{
   if (idx < 0) return res.status(404).json({ error: 'User not found' });
   const incoming = { reels_status };
   users[idx] = mergeUser(users[idx], incoming);
-  await writeUsers(users);
+  try {
+    await writeUsers(users);
+  } catch (e) {
+    console.error('❌ Persist error on PUT /api/users/:id/status:', e.message);
+    return res.status(500).json({ error: 'Failed to save user data' });
+  }
   res.json(users[idx]);
 });
 
@@ -161,7 +232,12 @@ app.post('/save_user_data', async (req,res)=>{
   const idx = users.findIndex(u => String(u.telegram_id) === String(b.telegram_id));
   const merged = mergeUser(idx >= 0 ? users[idx] : null, b);
   if (idx >= 0) users[idx] = merged; else users.push(merged);
-  await writeUsers(users);
+  try {
+    await writeUsers(users);
+  } catch (e) {
+    console.error('❌ Persist error on POST /save_user_data:', e.message);
+    return res.status(500).json({ error: 'Failed to save user data' });
+  }
   res.json({ success: true });
 });
 app.get('/get_user_data', (req,res)=>{
@@ -183,5 +259,5 @@ app.use((req,res,next)=>{
 
 app.listen(PORT, ()=>{
   ensureStorage();
-  console.log(`✅ API server on ${PORT} (data: ${DATA_FILE})`);
+  console.log(`✅ API server on ${PORT} (data: ${PRIMARY_DATA_FILE}, legacy: ${LEGACY_DATA_FILE})`);
 });
