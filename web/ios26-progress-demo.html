@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iOS 26 Progress Bar Demo</title>
+  <link rel="stylesheet" href="assets/styles/liquid-glass.css">
+  <link rel="stylesheet" href="assets/styles/ios26-progress.css">
+  <style>
+    :root {
+      --primary-color: #007AFF;
+      --background: radial-gradient(1200px 800px at 25% -15%, #f0f8ff 0%, #ffffff 40%, #f8f9fc 100%);
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, Segoe UI, Arial, sans-serif;
+      background: var(--background);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      color: #111319;
+    }
+    
+    .demo-container {
+      width: 100%;
+      max-width: 500px;
+      margin: 20px auto;
+    }
+    
+    .glass-card {
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+      margin-bottom: 24px;
+    }
+    
+    h1, h2, h3 {
+      font-weight: 700;
+      margin-top: 0;
+      letter-spacing: -0.3px;
+    }
+    
+    h1 {
+      font-size: 1.8rem;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    
+    h2 {
+      font-size: 1.4rem;
+      margin-bottom: 16px;
+    }
+    
+    h3 {
+      font-size: 1.2rem;
+      margin-bottom: 12px;
+    }
+    
+    p {
+      font-size: 1rem;
+      line-height: 1.5;
+      color: #8E8E93;
+      margin: 0 0 16px 0;
+    }
+    
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin: 20px 0;
+    }
+    
+    button {
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 16px;
+      padding: 12px 20px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0, 122, 255, 0.25);
+      min-width: 100px;
+    }
+    
+    button:hover {
+      background: #0062CC;
+      box-shadow: 0 6px 16px rgba(0, 122, 255, 0.35);
+      transform: translateY(-2px);
+    }
+    
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(0, 122, 255, 0.2);
+    }
+    
+    .theme-toggle {
+      background: #AF52DE;
+      box-shadow: 0 4px 12px rgba(175, 82, 222, 0.25);
+    }
+    
+    .theme-toggle:hover {
+      background: #9b45c9;
+      box-shadow: 0 6px 16px rgba(175, 82, 222, 0.35);
+    }
+    
+    .feature-list {
+      padding-left: 20px;
+    }
+    
+    .feature-list li {
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    
+    .demo-section {
+      margin: 30px 0;
+    }
+    
+    .code-sample {
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+    
+    .back-link {
+      display: inline-block;
+      margin-top: 20px;
+      color: var(--primary-color);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    
+    .back-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-container">
+    <div class="glass-card">
+      <h1>iOS 26 Progress Bar</h1>
+      <p>Современный прогресс-бар с эффектом liquid glass и анимациями в стиле iOS 26</p>
+      
+      <!-- iOS 26 Style Progress Bar -->
+      <div class="progress-container-ios26">
+        <div class="progress-segment-ios26" id="segment1"></div>
+        <div class="progress-segment-ios26" id="segment2"></div>
+        <div class="progress-segment-ios26" id="segment3"></div>
+      </div>
+      
+      <div class="controls">
+        <button onclick="updateProgress(0)">Reset</button>
+        <button onclick="updateProgress(1)">Step 1</button>
+        <button onclick="updateProgress(2)">Step 2</button>
+        <button onclick="updateProgress(3)">Step 3</button>
+        <button class="theme-toggle" onclick="toggleTheme()">Тема</button>
+      </div>
+    </div>
+    
+    <div class="glass-card">
+      <h2>Особенности дизайна</h2>
+      <ul class="feature-list">
+        <li><strong>Liquid Glass Effect</strong> - Эффект стекла с размытием и насыщением цвета</li>
+        <li><strong>Gradient Fill</strong> - Градиентная заливка с бликовыми эффектами</li>
+        <li><strong>Dynamic Shine</strong> - Анимация бликов, движущихся по активным сегментам</li>
+        <li><strong>Pulse Animation</strong> - Пульсация активных сегментов для визуальной обратной связи</li>
+        <li><strong>Adaptive Design</strong> - Адаптивный дизайн для разных размеров экранов</li>
+        <li><strong>Smooth Transitions</strong> - Плавные переходы между состояниями</li>
+      </ul>
+    </div>
+    
+    <div class="glass-card">
+      <h2>Техническая реализация</h2>
+      <p>Прогресс-бар использует современные CSS технологии:</p>
+      
+      <div class="code-sample">
+        /* Основные технологии */
+        - backdrop-filter: blur() saturate()
+        - CSS градиенты и тени
+        - CSS анимации и переходы
+        - Flexbox для адаптивной верстки
+        - CSS переменные для темизации
+      </div>
+      
+      <h3>HTML структура</h3>
+      <div class="code-sample">
+&lt;div class="progress-container-ios26"&gt;
+  &lt;div class="progress-segment-ios26"&gt;&lt;/div&gt;
+  &lt;div class="progress-segment-ios26"&gt;&lt;/div&gt;
+  &lt;div class="progress-segment-ios26"&gt;&lt;/div&gt;
+&lt;/div&gt;
+      </div>
+      
+      <h3>Активация сегментов</h3>
+      <div class="code-sample">
+// JavaScript для активации сегментов
+const segment = document.querySelector('.progress-segment-ios26');
+segment.classList.add('active', 'pulse');
+      </div>
+    </div>
+    
+    <div class="glass-card">
+      <h2>Инструкция по использованию</h2>
+      <ol>
+        <li>Подключите CSS файлы в ваш HTML:
+          <div class="code-sample">
+&lt;link rel="stylesheet" href="assets/styles/liquid-glass.css"&gt;
+&lt;link rel="stylesheet" href="assets/styles/ios26-progress.css"&gt;
+          </div>
+        </li>
+        <li>Добавьте HTML структуру прогресс-бара</li>
+        <li>Используйте JavaScript для активации сегментов</li>
+        <li>Настройте цвета через CSS переменные при необходимости</li>
+      </ol>
+    </div>
+    
+    <a href="index.html" class="back-link">← Вернуться к основному приложению</a>
+  </div>
+
+  <script>
+    function updateProgress(step) {
+      const segments = document.querySelectorAll('.progress-segment-ios26');
+      
+      segments.forEach((segment, index) => {
+        // Сброс всех классов
+        segment.classList.remove('active', 'pulse', 'fill');
+        
+        // Активация сегментов
+        if (index < step) {
+          // Добавляем классы с небольшой задержкой для плавного эффекта
+          setTimeout(() => {
+            segment.classList.add('fill');
+            setTimeout(() => {
+              segment.classList.add('active', 'pulse');
+            }, 150);
+          }, index * 100);
+        }
+      });
+    }
+    
+    function toggleTheme() {
+      const body = document.body;
+      const isDark = body.style.background.includes('radial-gradient(1200px 800px at 25% -15%, #0a0a0f 0%, #1a1a2e 40%, #16213e 100%)');
+      
+      if (isDark) {
+        // Переключение на светлую тему
+        body.style.background = 'radial-gradient(1200px 800px at 25% -15%, #f0f8ff 0%, #ffffff 40%, #f8f9fc 100%)';
+        document.documentElement.style.setProperty('--background', 'radial-gradient(1200px 800px at 25% -15%, #f0f8ff 0%, #ffffff 40%, #f8f9fc 100%)');
+      } else {
+        // Переключение на темную тему
+        body.style.background = 'radial-gradient(1200px 800px at 25% -15%, #0a0a0f 0%, #1a1a2e 40%, #16213e 100%)';
+        document.documentElement.style.setProperty('--background', 'radial-gradient(1200px 800px at 25% -15%, #0a0a0f 0%, #1a1a2e 40%, #16213e 100%)');
+        
+        // Изменяем цвет текста для лучшей видимости
+        document.querySelectorAll('.glass-card').forEach(card => {
+          card.style.background = 'rgba(30, 30, 46, 0.75)';
+          card.style.color = '#ffffff';
+        });
+        
+        document.querySelectorAll('p, .feature-list li').forEach(el => {
+          el.style.color = '#a1a1aa';
+        });
+      }
+    }
+    
+    // Инициализация с первым активным сегментом
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        updateProgress(1);
+      }, 500);
+    });
+  </script>
+</body>
+</html>

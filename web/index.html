@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Reels Exchange">
+  <title data-i18n="app_title">Instagram Reels Exchange</title>
+  <!-- Подключаем сначала основные стили, затем анимации -->
+  <link rel="stylesheet" href="assets/styles/liquid-glass.css">
+  <link rel="stylesheet" href="assets/styles/animations.css">
+  <link rel="stylesheet" href="assets/styles/ios26-progress.css">
+  <link rel="apple-touch-icon" href="assets/images/icon.png">
+  <script defer src="scripts/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Introduction screen -->
+    <div id="intro-screen" class="intro-screen">
+      <h1 class="intro-title" data-i18n="app_title">Instagram Reels Exchange</h1>
+    </div>
+    <header class="glass card">
+      <div class="header-content">
+        <h1 data-i18n="app_title">Instagram Reels Exchange</h1>
+        <!-- Theme toggle switch with label -->
+        <div class="theme-switch-wrapper">
+          <span class="theme-label" data-i18n="theme_label">Theme</span>
+          <label class="theme-switch" for="checkbox">
+            <input type="checkbox" id="checkbox" />
+            <div class="slider"></div>
+          </label>
+        </div>
+      </div>
+    </header>
+    <!-- tooltip overlay -->
+    <div id="tooltip-overlay" class="overlay hidden">
+      <div class="tooltip-box glass card">
+        <p id="tooltip-text"></p>
+        <button id="tooltip-ok" class="primary-btn">OK</button>
+      </div>
+    </div>
+    <!-- progress bar with three segments - iOS 26 style -->
+    <div class="progress-container-ios26">
+      <div class="progress-segment-ios26" data-step="1"></div>
+      <div class="progress-segment-ios26" data-step="2"></div>
+      <div class="progress-segment-ios26" data-step="3"></div>
+    </div>
+    <!-- Step 1 -->
+    <section id="step1" class="screen">
+      <div class="screen-header">
+        <h2 data-i18n="step1_title"></h2>
+        <button class="help-btn" data-tooltip="tooltip_step1">?</button>
+      </div>
+      <div class="form-group">
+        <label for="region-select" data-i18n="region_label"></label>
+        <select id="region-select" class="glass input">
+          <option value="" disabled selected data-i18n="select_region">Select region</option>
+          <option value="USA" data-i18n-option="region_option_usa">USA</option>
+          <option value="Mexico" data-i18n-option="region_option_mexico">Mexico</option>
+          <option value="Canada" data-i18n-option="region_option_canada">Canada</option>
+          <option value="BRAZIL" data-i18n-option="region_option_brazil">Brazil</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="language-select" data-i18n="language_label"></label>
+        <select id="language-select" class="glass input">
+          <option value="" disabled selected data-i18n="select_language">Select language</option>
+          <option value="en" data-i18n-option="language_option_en">English</option>
+          <option value="es" data-i18n-option="language_option_es">Español</option>
+          <option value="fr" data-i18n-option="language_option_fr">Français</option>
+          <option value="pt" data-i18n-option="language_option_pt">Português</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="timezone-select" data-i18n="timezone_label">Time zone (UTC)</label>
+        <select id="timezone-select" class="glass input">
+          <option value="" disabled selected data-i18n="select_timezone">Select time zone</option>
+          <option value="UTC-08:00">UTC-08:00</option>
+          <option value="UTC-05:00">UTC-05:00</option>
+          <option value="UTC-03:00">UTC-03:00</option>
+          <option value="UTC+00:00">UTC+00:00</option>
+          <option value="UTC+01:00">UTC+01:00</option>
+          <option value="UTC+02:00">UTC+02:00</option>
+          <option value="UTC+03:00">UTC+03:00</option>
+        </select>
+      </div>
+      <div id="step1-error" class="error hidden"></div>
+      <button id="step1-next" class="primary-btn" data-i18n="next_button"></button>
+    </section>
+    <!-- Step 2 -->
+    <section id="step2" class="screen hidden">
+      <div class="screen-header">
+        <h2 data-i18n="step2_title"></h2>
+        <button class="help-btn" data-tooltip="tooltip_step2">?</button>
+      </div>
+      <p data-i18n="instructions_text"></p>
+      <a id="goto-link" href="https://www.instagram.com/" target="_blank" class="link" data-i18n="go_to_search"></a>
+      <div id="step2-error" class="error hidden"></div>
+      <button id="step2-next" class="primary-btn" data-i18n="next_button"></button>
+    </section>
+    <!-- Step 3 -->
+    <section id="step3" class="screen hidden">
+      <div class="screen-header">
+        <h2 data-i18n="step3_title"></h2>
+        <button class="help-btn" data-tooltip="tooltip_step3">?</button>
+      </div>
+      <div class="form-group">
+        <label for="reel-link" data-i18n="reels_link_label"></label>
+        <!-- Улучшенные атрибуты для мобильных устройств -->
+        <input type="url" id="reel-link" class="glass input" placeholder="https://www.instagram.com/reel/..." 
+               inputmode="url" enterkeyhint="done" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" 
+               pattern="https://www\.instagram\.com/reel/.+" title="Please enter a valid Instagram Reels link" />
+      </div>
+      <div class="form-group">
+        <label for="code-inputs" data-i18n="code_label"></label>
+        <!-- Полностью переделанные поля ввода кода без зеленых окошек -->
+        <div id="code-inputs" class="code-inputs-container">
+          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
+                 autocomplete="one-time-code" title="Enter a single digit" />
+          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
+                 autocomplete="one-time-code" title="Enter a single digit" />
+          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
+                 autocomplete="one-time-code" title="Enter a single digit" />
+          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
+                 autocomplete="one-time-code" title="Enter a single digit" />
+          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
+                 autocomplete="one-time-code" title="Enter a single digit" />
+          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
+                 autocomplete="one-time-code" title="Enter a single digit" />
+          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
+                 autocomplete="one-time-code" title="Enter a single digit" />
+          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
+                 autocomplete="one-time-code" title="Enter a single digit" />
+          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
+                 autocomplete="one-time-code" title="Enter a single digit" />
+        </div>
+        <!-- Подсказка для администратора -->
+        <div class="admin-hint" style="text-align: center; margin-top: 8px; font-size: 0.8rem; color: var(--text-secondary);">
+          Для администратора: введите 123456789 чтобы пропустить проверку
+        </div>
+      </div>
+      <!-- Add the "Back to Stories" link styled like "Go to code search" -->
+      <a id="back-to-stories" href="https://www.instagram.com/" target="_blank" class="link" data-i18n="back_to_stories">Back to Stories</a>
+      <div id="step3-error" class="error hidden"></div>
+      <button id="step3-submit" class="primary-btn" data-i18n="get_views_button">Get views</button>
+    </section>
+    <!-- Bottom Navigation Menu -->
+    <nav id="bottom-menu" class="bottom-menu hidden glass card">
+      <button class="menu-btn" data-view="referral" data-i18n="menu_referral"></button>
+      <button class="menu-btn" data-view="profile" data-i18n="menu_profile"></button>
+      <button class="menu-btn" data-view="leaderboard" data-i18n="menu_leaderboard"></button>
+    </nav>
+    <!-- Success overlay: shows after submission instead of a separate screen -->
+    <div id="success-overlay" class="overlay hidden">
+      <div class="success-box glass card">
+        <h2 data-i18n="success_title"></h2>
+        <p data-i18n="success_message"></p>
+        <button id="success-ok" class="primary-btn" data-i18n="ok_button"></button>
+      </div>
+    </div>
+    <!-- Referral View -->
+    <section id="referral-view" class="menu-view hidden glass card">
+      <h2 data-i18n="referral_title"></h2>
+      <p data-i18n="referral_description"></p>
+      <input type="text" id="referral-link" readonly class="glass input" />
+      <p id="referral-count" class="referral-count"></p>
+      <div class="referral-actions">
+        <button id="copy-referral" class="secondary-btn" data-i18n="copy_link"></button>
+        <button id="send-referral" class="secondary-btn" data-i18n="send_contact"></button>
+      </div>
+    </section>
+    <!-- Profile View -->
+    <section id="profile-view" class="menu-view hidden glass card">
+      <h2 data-i18n="profile_heading"></h2>
+      <!-- User card -->
+      <div class="profile-block user-block glass">
+        <img id="profile-avatar" src="" alt="avatar" class="avatar" />
+        <span id="profile-nickname" class="nickname"></span>
+      </div>
+      <!-- Balance card -->
+      <div class="profile-block balance-block glass">
+        <div class="balance-info">
+          <p class="balance-title" data-i18n="balance_title"></p>
+          <p id="balance-today" class="balance-today"></p>
+        </div>
+        <div id="balance-points" class="balance-points"></div>
+      </div>
+      <!-- Reel card -->
+      <div class="profile-block reel-block glass">
+        <p class="reel-title" data-i18n="your_reel_title"></p>
+        <p id="profile-link" class="reel-link"></p>
+        <p id="profile-status" class="reel-status"></p>
+      </div>
+      <!-- Logout button -->
+      <button id="logout-btn" class="primary-btn logout-btn" data-i18n="menu_logout">Logout</button>
+    </section>
+    <!-- Leaderboard View -->
+    <section id="leaderboard-view" class="menu-view hidden glass card">
+      <h2 data-i18n="leaderboard_title"></h2>
+      <ul id="leaderboard-list" class="leaderboard-list"></ul>
+    </section>
+  </div>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Progress Bar Test</title>
+  <link rel="stylesheet" href="assets/styles/liquid-glass.css">
+  <link rel="stylesheet" href="assets/styles/animations.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, Segoe UI, Arial, sans-serif;
+      background: radial-gradient(1200px 800px at 25% -15%, #f0f8ff 0%, #ffffff 40%, #f8f9fc 100%);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    
+    .test-container {
+      width: 100%;
+      max-width: 400px;
+      margin: 20px auto;
+    }
+    
+    .glass {
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+      margin-bottom: 20px;
+    }
+    
+    button {
+      background: #007AFF;
+      color: white;
+      border: none;
+      border-radius: 14px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    
+    button:hover {
+      background: #0062CC;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <div class="glass">
+      <h2>Progress Bar Test</h2>
+      <p>Click the buttons below to test the progress bar:</p>
+      
+      <!-- Progress bar with three segments -->
+      <div class="progress-container glass">
+        <div class="progress-segment" data-step="1"></div>
+        <div class="progress-segment" data-step="2"></div>
+        <div class="progress-segment" data-step="3"></div>
+      </div>
+      
+      <div style="text-align: center;">
+        <button onclick="updateProgress(1)">Step 1</button>
+        <button onclick="updateProgress(2)">Step 2</button>
+        <button onclick="updateProgress(3)">Step 3</button>
+        <button onclick="resetProgress()">Reset</button>
+      </div>
+    </div>
+    
+    <div class="glass">
+      <h3>Инструкция по тестированию:</h3>
+      <ol>
+        <li>Нажмите "Step 1" - первый сегмент должен стать синим</li>
+        <li>Нажмите "Step 2" - первые два сегмента должны стать синими</li>
+        <li>Нажмите "Step 3" - все три сегмента должны стать синими</li>
+        <li>Нажмите "Reset" - все сегменты должны вернуться к серому цвету</li>
+      </ol>
+      <p>Если сегменты не отображаются, проверьте консоль браузера на наличие ошибок.</p>
+    </div>
+  </div>
+
+  <script>
+    function updateProgress(step) {
+      const segments = document.querySelectorAll('.progress-segment');
+      segments.forEach((seg, index) => {
+        if (index < step) {
+          seg.classList.add('active');
+        } else {
+          seg.classList.remove('active');
+        }
+      });
+    }
+    
+    function resetProgress() {
+      const segments = document.querySelectorAll('.progress-segment');
+      segments.forEach(seg => {
+        seg.classList.remove('active');
+      });
+    }
+  </script>
+</body>
+</html>

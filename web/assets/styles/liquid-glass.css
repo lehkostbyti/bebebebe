@@ -1,0 +1,990 @@
+/* Root variables for colours - IOS 26 style */
+:root {
+  --primary-color: #007AFF; /* IOS blue */
+  --secondary-color: #FF9500; /* IOS orange */
+  --error-color: #FF3B30; /* IOS red for errors */
+  --success-color: #34C759; /* IOS green for success */
+  --background: radial-gradient(1200px 800px at 25% -15%, #f0f8ff 0%, #ffffff 40%, #f8f9fc 100%);
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.05);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --text-primary: #111319;
+  --text-secondary: #8E8E93;
+  --text-tertiary: #C7C7CC;
+}
+
+/* Import animations */
+@import url('animations.css');
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, Segoe UI, Arial, sans-serif;
+  background: var(--background);
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: var(--text-primary);
+  font-smooth: always;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Introduction screen styles */
+.intro-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background);
+  z-index: 2000;
+  transition: opacity 2.5s ease-out, transform 2.5s ease-out;
+  /* Add liquid-glass effect */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.intro-title {
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-primary);
+  /* Add liquid-glass styling */
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 20px;
+  padding: 1.5rem 2rem;
+  box-shadow: var(--glass-shadow);
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* Add shimmer effect */
+  position: relative;
+  overflow: hidden;
+}
+
+.intro-title::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 1s ease;
+}
+
+.intro-title:hover::before {
+  left: 100%;
+}
+
+/* Enhanced pulse animation */
+@keyframes introPulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 0.9;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.intro-title {
+  animation: introPulse 2s infinite;
+}
+
+/* Hide intro screen with fade out and zoom out effect */
+.intro-screen.hidden {
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+}
+
+/* Скрываем скроллбар, но сохраняем возможность скролла */
+body::-webkit-scrollbar {
+  display: none; /* Скрываем скроллбар в WebKit браузерах */
+}
+
+body {
+  -ms-overflow-style: none; /* Скрываем скроллбар в IE и Edge */
+  scrollbar-width: none; /* Скрываем скроллбар в Firefox */
+}
+
+/* Предотвращаем горизонтальный скролл для всех элементов */
+* {
+  box-sizing: border-box;
+}
+
+#app {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden; /* Предотвращаем горизонтальный скролл для контейнера приложения */
+}
+
+header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding: 1.5rem 1rem 0.5rem;
+  animation: fadeInDown 0.4s ease-out;
+  /* Make header consistent with other glass cards */
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 20px;
+  box-shadow: var(--glass-shadow);
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  width: min(420px, calc(100% - 24px));
+  margin: 1rem auto;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+header h1 {
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: -0.24px;
+  margin: 0;
+  flex: 1;
+  text-align: center;
+}
+
+/* Theme switch styles */
+.theme-switch-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.theme-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.theme-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+}
+
+.theme-switch input {
+  display: none;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(142, 142, 147, 0.3);
+  transition: .4s;
+  border-radius: 34px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background: linear-gradient(135deg, #ffffff, #f0f0f0);
+  transition: .4s;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .slider {
+  background: rgba(0, 122, 255, 0.3);
+}
+
+input:checked + .slider:before {
+  transform: translateX(24px);
+  background: linear-gradient(135deg, #ffffff, #f0f0f0);
+}
+
+.slider:hover:before {
+  transform: scale(1.1);
+}
+
+.slider:active:before {
+  transform: scale(0.9);
+}
+
+/* Адаптивность для маленьких экранов */
+@media (max-width: 480px) {
+  header {
+    width: min(420px, calc(100% - 24px));
+    padding: 1.2rem 1rem 0.5rem;
+    border-radius: 16px;
+  }
+  
+  .theme-switch {
+    width: 45px;
+    height: 24px;
+  }
+  
+  .slider:before {
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+  }
+  
+  input:checked + .slider:before {
+    transform: translateX(21px);
+  }
+  
+  header h1 {
+    font-size: 1.3rem;
+  }
+}
+
+@media (max-width: 360px) {
+  header {
+    width: min(420px, calc(100% - 24px));
+    padding: 1rem 0.8rem 0.4rem;
+    border-radius: 14px;
+  }
+  
+  .theme-switch-wrapper {
+    gap: 4px;
+  }
+  
+  .theme-label {
+    font-size: 0.75rem;
+  }
+  
+  .theme-switch {
+    width: 40px;
+    height: 22px;
+  }
+  
+  .slider:before {
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+  }
+  
+  input:checked + .slider:before {
+    transform: translateX(18px);
+  }
+  
+  header h1 {
+    font-size: 1.2rem;
+  }
+  
+  .header-content {
+    gap: 0.5rem;
+  }
+}
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 20px;
+  padding: 1.25rem;
+  box-shadow: var(--glass-shadow);
+  transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.card {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+/* Progress bar composed of segments - enhanced IOS style */
+.progress-container {
+  width: min(300px, calc(100% - 24px));
+  height: 6px;
+  display: flex;
+  overflow: hidden;
+  border-radius: 6px;
+  margin: 12px auto 20px;
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+
+.progress-segment {
+  flex: 1;
+  margin-right: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-segment:last-child {
+  margin-right: 0;
+}
+
+.progress-segment.active {
+  background: var(--primary-color);
+  transform: scale(1.02);
+  box-shadow: 0 0 8px rgba(0, 122, 255, 0.3);
+}
+
+/* Более простая реализация без сложных псевдоэлементов */
+.progress-segment.active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: progressShine 1.5s infinite;
+  border-radius: 6px;
+}
+
+@keyframes progressShine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Screen container should fit on mobile devices */
+.screen {
+  width: min(420px, calc(100% - 24px));
+  margin: 0 auto;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  box-sizing: border-box;
+  animation: slideInUp 0.4s ease-out;
+  position: relative;
+}
+
+/* Screen header with title and help button */
+.screen-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  position: relative; /* Add positioning context */
+}
+
+.screen-header h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  flex: 1;
+}
+
+.help-btn {
+  background: rgba(0, 122, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: var(--primary-color);
+  box-shadow: 0 2px 6px rgba(0, 122, 255, 0.2);
+  z-index: 10;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.help-btn:hover {
+  background: rgba(0, 122, 255, 0.2);
+  transform: scale(1.1);
+}
+
+/* Адаптивность для маленьких экранов */
+@media (max-width: 480px) {
+  .help-btn {
+    width: 26px;
+    height: 26px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 360px) {
+  .help-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+}
+
+.hidden {
+  display: none !important;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%; /* Убедимся, что группа формы занимает всю доступную ширину */
+  box-sizing: border-box;
+}
+
+.form-group label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  letter-spacing: -0.1px;
+}
+
+.input {
+  padding: 0.8rem 1rem;
+  font-size: 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  width: 100%;
+  max-width: 100%;
+  outline: none;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.85);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  box-sizing: border-box;
+  /* Добавим стили, похожие на контейнер кода */
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.input:hover {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* Code inputs: nine cells for 9‑digit code - completely redesigned in IOS 26 style */
+.code-inputs-container {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0; /* Позволим контейнеру сжиматься при необходимости */
+}
+
+.code-digit {
+  flex: 1;
+  height: 50px;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.9); /* Белый фон без зелени */
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  color: var(--text-primary);
+  caret-color: var(--primary-color);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  min-width: 0;
+  box-sizing: border-box; /* Убедимся, что padding входит в размеры */
+  padding: 0; /* Уберем padding, чтобы цифры помещались лучше */
+}
+
+.code-digit:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3);
+  transform: scale(1.05);
+  z-index: 2;
+  background: white;
+}
+
+.code-digit:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.code-digit:valid {
+  border-color: var(--primary-color); /* Используем синий вместо зеленого */
+  background: rgba(255, 255, 255, 0.9); /* Белый фон без зелени */
+}
+
+.code-digit::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Responsive adjustments for code inputs */
+@media (max-width: 480px) {
+  .code-digit {
+    height: 42px;
+    font-size: 20px;
+    border-radius: 10px;
+  }
+  .intro-title {
+    font-size: 1.8rem;
+  }
+  
+  .glass {
+    border-radius: 16px;
+    padding: 1rem;
+  }
+  
+  .code-digit {
+    height: 42px;
+    font-size: 20px;
+  }
+  
+  .primary-btn, .secondary-btn {
+    padding: 0.65rem 1rem;
+    font-size: 1rem;
+  }
+  
+  .link {
+    font-size: 0.9rem;
+  }
+  
+  .profile-block {
+    border-radius: 16px;
+    padding: 1rem;
+  }
+  
+  .progress-container {
+    width: min(280px, calc(100% - 24px));
+  }
+  
+  .code-inputs-container {
+    gap: 6px;
+    padding: 0.4rem;
+    border-radius: 14px;
+  }
+  
+  .input {
+    font-size: 0.95rem;
+    padding: 0.7rem 0.9rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .code-digit {
+    height: 36px;
+    font-size: 18px;
+    border-radius: 8px;
+  }
+
+  .intro-title {
+    font-size: 1.6rem;
+  }
+  
+  .link {
+    font-size: 0.85rem;
+  }
+  
+  .code-inputs-container {
+    gap: 4px;
+    padding: 0.3rem;
+    border-radius: 12px;
+  }
+}
+
+/* Additional micro-interactions for code inputs */
+.code-digit:active {
+  transform: scale(0.98);
+  transition: transform 0.1s ease;
+}
+
+.code-digit.valid {
+  border-color: var(--primary-color); /* Используем синий вместо зеленого */
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.code-digit.invalid {
+  border-color: var(--error-color);
+  background: rgba(255, 255, 255, 0.9);
+  animation: shake 0.5s;
+}
+
+.primary-btn, .secondary-btn, .menu-btn {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-transform: none;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  letter-spacing: -0.1px;
+}
+
+.primary-btn {
+  background: var(--primary-color);
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.25);
+}
+
+.primary-btn:hover {
+  background: #0062CC;
+  box-shadow: 0 6px 16px rgba(0, 122, 255, 0.35);
+  transform: translateY(-2px);
+  animation: pulse 1s infinite;
+}
+
+.primary-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.2);
+}
+
+.primary-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.4s ease, height 0.4s ease;
+}
+
+.primary-btn:active::after {
+  width: 200px;
+  height: 200px;
+}
+
+.secondary-btn {
+  background: var(--secondary-color);
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 149, 0, 0.25);
+}
+
+.secondary-btn:hover {
+  background: #E68A00;
+  box-shadow: 0 6px 16px rgba(255, 149, 0, 0.35);
+  transform: translateY(-2px);
+  animation: pulse 1s infinite;
+}
+
+.secondary-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(255, 149, 0, 0.2);
+}
+
+/* Style for the back to stories button */
+#back-to-stories {
+  margin-top: 10px;
+  font-size: 0.95rem;
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
+}
+
+.menu-btn {
+  flex: 1;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 500; /* Меньший вес шрифта */
+  font-size: 0.85rem; /* Меньший размер шрифта */
+  padding: 8px 12px; /* Уменьшенные отступы */
+  border-radius: 16px; /* Закругленные края */
+  margin: 0 4px;
+  text-align: center; /* Центрирование текста */
+  transition: all 0.2s ease;
+  min-width: 70px; /* Минимальная ширина кнопки */
+}
+
+.menu-btn:hover {
+  color: var(--primary-color);
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.menu-btn.active {
+  color: var(--primary-color);
+  background: rgba(0, 122, 255, 0.12);
+}
+
+/* Стили для кнопки выхода */
+.logout-btn {
+  background: var(--error-color); /* Красный фон для кнопки выхода */
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 59, 48, 0.25);
+  margin-top: 1rem; /* Отступ сверху */
+}
+
+.logout-btn:hover {
+  background: #ff1a0d; /* Более темный красный при наведении */
+  box-shadow: 0 6px 16px rgba(255, 59, 48, 0.35);
+  transform: translateY(-2px);
+}
+
+.logout-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(255, 59, 48, 0.2);
+}
+
+.error {
+  color: var(--error-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  animation: shake 0.5s;
+}
+
+.error::before {
+  content: "⚠️";
+  font-size: 0.85rem;
+}
+
+.error.hidden {
+  display: none;
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease-out;
+}
+
+.tooltip-box, .success-box {
+  max-width: 400px;
+  text-align: center;
+  animation: zoomIn 0.3s ease-out;
+}
+
+.tooltip-box p, .success-box p {
+  margin: 1rem 0;
+  line-height: 1.5;
+  font-size: 1rem;
+}
+
+.bottom-menu {
+  position: fixed;
+  bottom: 20px; /* Отступ от нижнего края экрана */
+  left: 50%;
+  transform: translateX(-50%);
+  width: fit-content; /* Ширина по содержимому */
+  display: flex;
+  justify-content: space-around;
+  padding: 12px 16px; /* Уменьшенные отступы */
+  box-sizing: border-box;
+  /* Улучшенный стиль жидкого стекла iOS 26 */
+  background: rgba(255, 255, 255, 0.4); /* Более прозрачный фон */
+  backdrop-filter: blur(30px) saturate(200%); /* Усиленный эффект размытия */
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.3); /* Более светлая граница */
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2); /* Внутренняя тень для глубины */
+  z-index: 999;
+  border-radius: 30px; /* Более овальная форма */
+  min-width: 280px; /* Минимальная ширина */
+  max-width: 95%; /* Максимальная ширина увеличена */
+}
+
+.menu-btn {
+  flex: 1;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 500; /* Меньший вес шрифта */
+  font-size: 0.75rem; /* Уменьшенный размер шрифта */
+  padding: 8px 10px; /* Уменьшенные отступы */
+  border-radius: 20px; /* Более закругленные края */
+  margin: 0 3px; /* Уменьшенные отступы между кнопками */
+  text-align: center; /* Центрирование текста */
+  transition: all 0.2s ease;
+  min-width: 60px; /* Минимальная ширина кнопки уменьшена */
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap; /* Предотвращаем перенос текста */
+  text-overflow: ellipsis; /* Добавляем многоточие при обрезке текста */
+}
+
+.menu-btn:hover {
+  color: var(--primary-color);
+  background: rgba(0, 122, 255, 0.15); /* Более насыщенный фон при наведении */
+}
+
+.menu-btn.active {
+  color: var(--primary-color);
+  background: rgba(0, 122, 255, 0.2); /* Более насыщенный активный фон */
+}
+
+.menu-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.3s ease, height 0.3s ease;
+}
+
+.menu-btn:active::after {
+  width: 200px;
+  height: 200px;
+}
+
+/* Адаптивность для маленьких экранов */
+@media (max-width: 360px) {
+  .bottom-menu {
+    min-width: 240px;
+    padding: 10px 12px;
+    border-radius: 25px; /* Адаптивная форма */
+  }
+  
+  .menu-btn {
+    font-size: 0.7rem; /* Еще немного уменьшенный размер шрифта */
+    padding: 6px 6px; /* Уменьшенные отступы */
+    min-width: 50px; /* Минимальная ширина кнопки уменьшена */
+    border-radius: 18px; /* Адаптивные закругления */
+    margin: 0 2px; /* Еще меньшие отступы между кнопками */
+  }
+}
+
+@media (max-width: 320px) {
+  .bottom-menu {
+    min-width: 220px;
+    padding: 8px 10px;
+    border-radius: 22px;
+  }
+  
+  .menu-btn {
+    font-size: 0.65rem;
+    padding: 5px 5px;
+    min-width: 45px;
+    border-radius: 16px;
+    margin: 0 1px;
+  }
+}
+
+.menu-view {
+  width: min(420px, calc(100% - 24px));
+  margin: 0 auto 4.5rem auto;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  animation: slideInUp 0.4s ease-out;
+}
+
+.profile-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.avatar {
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
+  object-fit: cover;
+  background: linear-gradient(135deg, #007AFF, #AF52DE);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.leaderboard-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.leaderboard-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.leaderboard-list li:hover {
+  background: rgba(0, 122, 255, 0.05);
+  border-radius: 12px;
+  padding: 0.75rem;
+  transform: translateX(5px);
+}
+
+.leaderboard-list li:last-child {
+  border-bottom: none;
+}
+
+.leaderboard-list li span:first-child {
+  font-weight: 500;
+}
+
+.leaderboard-list li span:last-child {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.leaderboard-list li span {
+  font-size: 1rem;
+}
