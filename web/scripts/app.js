@@ -153,6 +153,11 @@
     return typeof link === 'string' && /^https:\/\/www\.instagram\.com\/reel\//i.test(link.trim());
   }
 
+  function getReelPlaceholder() {
+    const langData = translations[currentLanguage] || {};
+    return langData['insert_reel_link'] || 'Insert the link to your reel';
+  }
+
   function isProfileComplete(user) {
     if (!user || typeof user !== 'object') return false;
     const regionOk = isValidString(user.region);
@@ -465,6 +470,76 @@
     return payload;
   }
 
+  function buildProfileUpdatePayload(overrides = {}) {
+    const profile = cachedProfile || {};
+    let telegramId = overrides.telegram_id || profile.telegram_id || getTelegramIdForRequest();
+    if (telegramId == null || telegramId === '') {
+      const storedId = safeGetItem('telegram_id');
+      if (storedId) telegramId = storedId;
+    }
+    if (telegramId == null || telegramId === '') return null;
+
+    const payload = { telegram_id: telegramId };
+    const fieldsToCopy = [
+      'user_id',
+      'username',
+      'first_name',
+      'last_name',
+      'photo_url',
+      'region',
+      'language',
+      'utc_offset',
+      'reels_link',
+      'reels_status',
+      'nine_digit_code',
+      'points_total',
+      'points_current',
+      'points',
+      'daily_points',
+      'referrals',
+      'referrer_id'
+    ];
+
+    fieldsToCopy.forEach(key => {
+      const value = profile[key];
+      if (value === undefined || value === null) return;
+      if (key === 'referrals') {
+        if (Array.isArray(value)) {
+          payload[key] = value;
+        }
+        return;
+      }
+      payload[key] = value;
+    });
+
+    if (!payload.language) {
+      const storedLanguage = safeGetItem('language');
+      if (storedLanguage) payload.language = storedLanguage;
+    }
+    if (!payload.region) {
+      const storedRegion = safeGetItem('region');
+      if (storedRegion) payload.region = storedRegion;
+    }
+    if (!payload.utc_offset) {
+      const storedUtc = safeGetItem('utc_offset');
+      if (storedUtc) payload.utc_offset = storedUtc;
+    }
+
+    if (profile.telegram_meta) payload.telegram_meta = profile.telegram_meta;
+    if (profile.telegram_launch) payload.telegram_launch = profile.telegram_launch;
+
+    const merged = { ...payload, ...overrides };
+    if (merged.nine_digit_code != null) {
+      merged.nine_digit_code = coerceBoolean(merged.nine_digit_code);
+    }
+    Object.keys(merged).forEach(key => {
+      if (merged[key] === undefined) {
+        delete merged[key];
+      }
+    });
+    return merged;
+  }
+
   async function ensureProfileData(forceRefresh = false) {
     if (!forceRefresh && cachedProfile) return cachedProfile;
     const telegramId = getTelegramIdForRequest();
@@ -597,6 +672,11 @@
     if (tzSelect && tzSelect.selectedIndex == 0) {
       const placeholderText = langData['select_timezone'] || 'Select time zone';
       tzSelect.options[0].textContent = placeholderText;
+    }
+
+    const profileLinkInput = document.getElementById('profile-link-input');
+    if (profileLinkInput) {
+      profileLinkInput.placeholder = langData['insert_reel_link'] || 'Insert the link to your reel';
     }
 
   }
@@ -823,6 +903,9 @@
     const balancePointsEl = document.getElementById('balance-points');
     const linkEl = document.getElementById('profile-link');
     const statusEl = document.getElementById('profile-status');
+    const editPanel = document.getElementById('reel-edit-panel');
+    const editInput = document.getElementById('profile-link-input');
+    const editErrorEl = document.getElementById('reel-edit-error');
 
     if (!user && cachedProfile) {
       user = cachedProfile;
@@ -854,19 +937,165 @@
     balanceTodayEl.textContent = todayLabel.replace('{0}', daily);
     balancePointsEl.textContent = `${pointsTotal} ⚡`;
 
-    if (user && user.reels_link) {
-      linkEl.textContent = user.reels_link;
-      linkEl.classList.remove('placeholder');
-    } else {
-      const placeholder = translations[currentLanguage]['insert_reel_link'] || 'Insert the link to your reel';
-      linkEl.textContent = placeholder;
-      linkEl.classList.add('placeholder');
+    const placeholder = getReelPlaceholder();
+
+    if (editPanel) {
+      editPanel.classList.add('hidden');
+    }
+    if (editErrorEl) {
+      editErrorEl.textContent = '';
+      editErrorEl.classList.add('hidden');
+    }
+    if (editInput) {
+      editInput.value = user && user.reels_link ? user.reels_link : '';
+      editInput.placeholder = placeholder;
+    }
+
+    if (linkEl) {
+      if (user && user.reels_link) {
+        linkEl.textContent = user.reels_link;
+        linkEl.href = user.reels_link;
+        linkEl.classList.remove('placeholder');
+        linkEl.setAttribute('target', '_blank');
+        linkEl.setAttribute('rel', 'noopener noreferrer');
+        linkEl.title = user.reels_link;
+        linkEl.removeAttribute('aria-disabled');
+        linkEl.removeAttribute('tabindex');
+      } else {
+        linkEl.textContent = placeholder;
+        linkEl.classList.add('placeholder');
+        linkEl.removeAttribute('href');
+        linkEl.removeAttribute('target');
+        linkEl.removeAttribute('rel');
+        linkEl.removeAttribute('title');
+        linkEl.setAttribute('aria-disabled', 'true');
+        linkEl.setAttribute('tabindex', '-1');
+      }
     }
 
     const statusLabel = translations[currentLanguage]['profile_status'] || 'Status';
     const statusKey = 'status_' + ((user && user.reels_status) || 'pending');
     const statusText = translations[currentLanguage][statusKey] || ((user && user.reels_status) || 'pending');
     statusEl.textContent = `${statusLabel}: ${statusText}`;
+  }
+
+  function showReelEditPanel() {
+    const panel = document.getElementById('reel-edit-panel');
+    if (!panel) return;
+    const errorEl = document.getElementById('reel-edit-error');
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.classList.add('hidden');
+    }
+    const inputEl = document.getElementById('profile-link-input');
+    if (inputEl) {
+      const profile = cachedProfile || null;
+      inputEl.value = profile && profile.reels_link ? profile.reels_link : '';
+      inputEl.placeholder = getReelPlaceholder();
+      requestAnimationFrame(() => {
+        try {
+          inputEl.focus({ preventScroll: false });
+        } catch (_) {
+          try { inputEl.focus(); } catch (err) { /* ignore */ }
+        }
+        try {
+          const length = inputEl.value.length;
+          inputEl.setSelectionRange(length, length);
+        } catch (_) {
+          /* selection not supported */
+        }
+      });
+    }
+    panel.classList.remove('hidden');
+  }
+
+  function hideReelEditPanel() {
+    const panel = document.getElementById('reel-edit-panel');
+    if (panel) {
+      panel.classList.add('hidden');
+    }
+    const errorEl = document.getElementById('reel-edit-error');
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.classList.add('hidden');
+    }
+    const inputEl = document.getElementById('profile-link-input');
+    if (inputEl) {
+      const profile = cachedProfile || null;
+      inputEl.value = profile && profile.reels_link ? profile.reels_link : '';
+    }
+  }
+
+  async function handleReelEditSave() {
+    const inputEl = document.getElementById('profile-link-input');
+    const errorEl = document.getElementById('reel-edit-error');
+    if (!inputEl) return;
+    const langData = translations[currentLanguage] || {};
+    const fallbackError = langData['error_reel_update'] || 'Unable to update your reel link right now. Please try again.';
+
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.classList.add('hidden');
+    }
+
+    const newLink = inputEl.value.trim();
+    if (!isValidReelLink(newLink)) {
+      if (errorEl) {
+        errorEl.textContent = langData['error_reel'] || fallbackError;
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    let profile = cachedProfile;
+    if (!profile) {
+      profile = await ensureProfileData();
+    }
+    const previousLink = profile && profile.reels_link ? profile.reels_link.trim() : '';
+    const hasChanged = previousLink !== newLink;
+    if (!hasChanged) {
+      hideReelEditPanel();
+      return;
+    }
+
+    if (profile && profile.reels_status === 'approved') {
+      const alertMessage = langData['alert_reel_pending'] || 'Updating the reel link will move its status back to Pending for review.';
+      window.alert(alertMessage);
+    }
+
+    const payload = buildProfileUpdatePayload({
+      reels_link: newLink,
+      reels_status: 'pending'
+    });
+    if (!payload) {
+      if (errorEl) {
+        errorEl.textContent = fallbackError;
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    const saveResult = await saveUserData(payload);
+    if (!saveResult.ok) {
+      const errorText = (typeof saveResult.error === 'string' && saveResult.error.trim())
+        ? saveResult.error
+        : fallbackError;
+      if (errorEl) {
+        errorEl.textContent = errorText;
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    const savedProfile = (saveResult.data && typeof saveResult.data === 'object')
+      ? saveResult.data
+      : { ...(profile || {}), ...payload };
+    savedProfile.reels_link = newLink;
+    savedProfile.reels_status = 'pending';
+    cachedProfile = savedProfile;
+    persistOnboardingCompletion(isProfileComplete(savedProfile));
+    populateProfile(savedProfile);
+    hideReelEditPanel();
   }
 
   /**
@@ -1190,6 +1419,45 @@
 
     // Setup theme switch
     setupThemeSwitch();
+
+    const editButton = document.getElementById('edit-reel-link');
+    if (editButton) {
+      editButton.addEventListener('click', () => {
+        const panel = document.getElementById('reel-edit-panel');
+        if (panel && !panel.classList.contains('hidden')) {
+          hideReelEditPanel();
+        } else {
+          showReelEditPanel();
+        }
+      });
+    }
+
+    const cancelEditButton = document.getElementById('cancel-reel-edit');
+    if (cancelEditButton) {
+      cancelEditButton.addEventListener('click', () => {
+        hideReelEditPanel();
+      });
+    }
+
+    const saveEditButton = document.getElementById('save-reel-edit');
+    if (saveEditButton) {
+      saveEditButton.addEventListener('click', () => {
+        handleReelEditSave();
+      });
+    }
+
+    const profileEditInput = document.getElementById('profile-link-input');
+    if (profileEditInput) {
+      profileEditInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          handleReelEditSave();
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          hideReelEditPanel();
+        }
+      });
+    }
 
     // Добавляем обработчики для кнопок помощи
     document.querySelectorAll('.help-btn').forEach(btn => {
