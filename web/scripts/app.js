@@ -9,9 +9,12 @@
   };
   const translations = {};
   let currentLanguage = localStorage.getItem('language') || 'en';
-  let currentUserId = localStorage.getItem('user_id') || null;
-  let hasCompletedOnboarding = localStorage.getItem('onboarding_complete') === 'true';
   let currentTheme = 'light';
+  let hasCompletedOnboarding = localStorage.getItem('onboarding_complete') === 'true';
+  let currentTelegramId = localStorage.getItem('telegram_id') || null;
+  let currentReferralId = localStorage.getItem('referral_id') || null;
+  let cachedProfile = null;
+  let cachedTelegramUser = null;
 
   function getStoredTheme() {
     try {
@@ -97,6 +100,107 @@
 
   const API_BASE = resolveApiBase();
   console.log('[Miniapp] API base:', API_BASE || '(relative to origin)');
+
+  function captureTelegramUser() {
+    if (cachedTelegramUser) return cachedTelegramUser;
+    try {
+      if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
+        cachedTelegramUser = Telegram.WebApp.initDataUnsafe.user;
+        if (cachedTelegramUser && cachedTelegramUser.id != null) {
+          currentTelegramId = cachedTelegramUser.id;
+          try {
+            localStorage.setItem('telegram_id', String(currentTelegramId));
+          } catch (e) {
+            console.warn('Unable to persist telegram_id', e);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to capture Telegram user', e);
+    }
+    return cachedTelegramUser;
+  }
+
+  function getTelegramIdForRequest() {
+    captureTelegramUser();
+    if (currentTelegramId != null && currentTelegramId !== '') {
+      return currentTelegramId;
+    }
+    const stored = localStorage.getItem('telegram_id');
+    if (stored) {
+      currentTelegramId = stored;
+      return stored;
+    }
+    return null;
+  }
+
+  async function fetchUserProfile(telegramId) {
+    if (telegramId == null || telegramId === '') return null;
+    try {
+      const response = await fetch(`${API_BASE}/api/users?telegram_id=${encodeURIComponent(telegramId)}`);
+      if (!response.ok) return null;
+      const payload = await response.json();
+      if (payload && typeof payload === 'object') {
+        return payload;
+      }
+    } catch (e) {
+      console.error('Failed to fetch user profile', e);
+    }
+    return null;
+  }
+
+  async function ensureProfileData(forceRefresh = false) {
+    if (!forceRefresh && cachedProfile) return cachedProfile;
+    const telegramId = getTelegramIdForRequest();
+    if (!telegramId) return null;
+    const profile = await fetchUserProfile(telegramId);
+    if (profile) {
+      cachedProfile = profile;
+      if (profile.user_id) {
+        currentReferralId = profile.user_id;
+        try {
+          localStorage.setItem('referral_id', profile.user_id);
+        } catch (e) {
+          console.warn('Unable to persist referral_id', e);
+        }
+      }
+      if (profile.language) {
+        currentLanguage = profile.language;
+        try {
+          localStorage.setItem('language', profile.language);
+        } catch (e) {
+          console.warn('Unable to persist language', e);
+        }
+      }
+      if (profile.region) {
+        try {
+          localStorage.setItem('region', profile.region);
+        } catch (e) {
+          console.warn('Unable to persist region', e);
+        }
+      }
+      if (profile.utc_offset) {
+        try {
+          localStorage.setItem('utc_offset', profile.utc_offset);
+        } catch (e) {
+          console.warn('Unable to persist utc_offset', e);
+        }
+      }
+    }
+    return profile;
+  }
+
+  function applyProfileSelections(user) {
+    const regionSelect = document.getElementById('region-select');
+    const languageSelect = document.getElementById('language-select');
+    const tzSelect = document.getElementById('timezone-select');
+    const regionValue = (user && user.region) || localStorage.getItem('region');
+    const languageValue = (user && user.language) || localStorage.getItem('language');
+    const tzValue = (user && user.utc_offset) || localStorage.getItem('utc_offset');
+    if (regionSelect && regionValue) regionSelect.value = regionValue;
+    if (languageSelect && languageValue) languageSelect.value = languageValue;
+    if (tzSelect && tzValue) tzSelect.value = tzValue;
+  }
 
   /**
    * Fetch and cache all translation files.
@@ -236,17 +340,6 @@
   }
 
   /**
-   * Generate a simple random user identifier if one does not exist.
-   */
-  function ensureUserId() {
-    if (!currentUserId) {
-      currentUserId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-      localStorage.setItem('user_id', currentUserId);
-    }
-  }
-
-  /**
-  /**
    * Validate step 1 inputs: region and language must be selected.
    */
   function validateStep1() {
@@ -379,71 +472,55 @@
    * Populate profile view from stored data.
    */
   function populateProfile(user) {
-    console.log('Populating profile with user data:', user);
-    
-    // Cache references to DOM elements once. Without redeclaring the same
-    // variables multiple times, we avoid accidental re‑declaration errors.
     const avatarEl = document.getElementById('profile-avatar');
     const nicknameEl = document.getElementById('profile-nickname');
     const balanceTodayEl = document.getElementById('balance-today');
     const balancePointsEl = document.getElementById('balance-points');
     const linkEl = document.getElementById('profile-link');
     const statusEl = document.getElementById('profile-status');
-    
-    // Try to get Telegram user data first
-    let telegramUser = null;
-    if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
-      telegramUser = Telegram.WebApp.initDataUnsafe.user;
-      console.log('Telegram user data found:', telegramUser);
-    } else {
-      console.log('No Telegram user data available');
+
+    if (!user && cachedProfile) {
+      user = cachedProfile;
     }
-    
-    // Set avatar and nickname from Telegram data if available, otherwise from user data
-    if (telegramUser && telegramUser.photo_url && telegramUser.username) {
-      // Use Telegram user data directly
-      console.log('Using Telegram user data for profile');
-      avatarEl.src = telegramUser.photo_url;
-      nicknameEl.textContent = '@' + (telegramUser.username || telegramUser.first_name || 'user');
-    } else if (user && user.photo_url && user.username) {
-      // Use stored user data - проверяем наличие Telegram данных в сохраненных данных
-      console.log('Using stored user data for profile');
-      avatarEl.src = user.photo_url;
-      nicknameEl.textContent = '@' + (user.username || user.first_name || 'user');
-    } else if (user && user.code === '222333444') {
-      // Тестовые данные для пользователя с кодом 222333444
-      console.log('Using test user data for profile');
-      avatarEl.src = user.photo_url || 'assets/images/placeholder_avatar.png';
-      nicknameEl.textContent = '@' + (user.username || user.first_name || 'testuser222333444');
-    } else {
-      // Fallback
-      console.log('Using fallback data for profile');
-      avatarEl.src = 'assets/images/placeholder_avatar.png';
-      nicknameEl.textContent = '@user';
+    if (user && user.user_id) {
+      currentReferralId = user.user_id;
+      try {
+        localStorage.setItem('referral_id', user.user_id);
+      } catch (e) {
+        console.warn('Unable to persist referral_id', e);
+      }
     }
-    
-    console.log('Profile avatar src:', avatarEl.src);
-    console.log('Profile nickname text:', nicknameEl.textContent);
-    
-    // Balance: show daily points and total points
-    const daily = user ? (user.daily_points || 0) : 0;
-    const points = user ? (user.points || 0) : 0;
+
+    const telegramUser = captureTelegramUser();
+    const username = (user && user.username) || (telegramUser && telegramUser.username) || '';
+    const firstName = (user && user.first_name) || (telegramUser && telegramUser.first_name) || '';
+    const displayName = username ? `@${username}` : (firstName ? firstName : '@user');
+    nicknameEl.textContent = displayName;
+
+    const avatarSrc = (user && user.photo_url) || (telegramUser && telegramUser.photo_url) || 'assets/images/placeholder_avatar.png';
+    avatarEl.src = avatarSrc;
+    avatarEl.alt = username ? `@${username}` : (firstName || 'avatar');
+
+    const daily = user && typeof user.daily_points === 'number' ? user.daily_points : 0;
+    const pointsTotal = user && typeof user.points_total === 'number'
+      ? user.points_total
+      : (user && typeof user.points === 'number' ? user.points : 0);
     const todayLabel = translations[currentLanguage]['balance_today'] || '+{0} today';
     balanceTodayEl.textContent = todayLabel.replace('{0}', daily);
-    balancePointsEl.innerHTML = `${points} ⚡`;
-    
-    // Show reel link
+    balancePointsEl.textContent = `${pointsTotal} ⚡`;
+
     if (user && user.reels_link) {
       linkEl.textContent = user.reels_link;
+      linkEl.classList.remove('placeholder');
     } else {
       const placeholder = translations[currentLanguage]['insert_reel_link'] || 'Insert the link to your reel';
       linkEl.textContent = placeholder;
+      linkEl.classList.add('placeholder');
     }
-    
-    // Show status
+
     const statusLabel = translations[currentLanguage]['profile_status'] || 'Status';
-    const statusKey = 'status_' + (user && user.reels_status || 'pending');
-    const statusText = translations[currentLanguage][statusKey] || (user && user.reels_status || 'pending');
+    const statusKey = 'status_' + ((user && user.reels_status) || 'pending');
+    const statusText = translations[currentLanguage][statusKey] || ((user && user.reels_status) || 'pending');
     statusEl.textContent = `${statusLabel}: ${statusText}`;
   }
 
@@ -453,18 +530,82 @@
   function populateLeaderboard(users) {
     const list = document.getElementById('leaderboard-list');
     list.innerHTML = '';
-    // sort by points descending
-    const sorted = users.slice().sort((a, b) => (b.points || 0) - (a.points || 0));
+    const sorted = users.slice().sort((a, b) => (b.points_total || 0) - (a.points_total || 0));
     sorted.forEach(u => {
       const li = document.createElement('li');
-      const left = document.createElement('span');
-      left.textContent = u.username || u.first_name || u.user_id;
-      const right = document.createElement('span');
-      right.textContent = `${u.points || 0} ${translations[currentLanguage]['points']}`;
-      li.appendChild(left);
-      li.appendChild(right);
+      li.classList.add('leaderboard-item');
+
+      const userBlock = document.createElement('div');
+      userBlock.classList.add('leaderboard-user');
+
+      const avatar = document.createElement('img');
+      avatar.classList.add('leaderboard-avatar');
+      avatar.src = u.photo_url || 'assets/images/placeholder_avatar.png';
+      avatar.alt = u.username ? `@${u.username}` : (u.first_name || 'avatar');
+      avatar.loading = 'lazy';
+
+      const meta = document.createElement('div');
+      meta.classList.add('leaderboard-meta');
+
+      const usernameEl = document.createElement('span');
+      usernameEl.classList.add('leaderboard-username');
+      const displayUsername = u.username ? `@${u.username}` : (u.first_name || u.user_id || 'user');
+      usernameEl.textContent = displayUsername;
+      meta.appendChild(usernameEl);
+
+      if (u.first_name && u.username !== u.first_name) {
+        const nameEl = document.createElement('span');
+        nameEl.classList.add('leaderboard-name');
+        nameEl.textContent = u.first_name;
+        meta.appendChild(nameEl);
+      }
+
+      userBlock.appendChild(avatar);
+      userBlock.appendChild(meta);
+
+      const pointsEl = document.createElement('span');
+      pointsEl.classList.add('leaderboard-points');
+      const totalPoints = u.points_total || 0;
+      pointsEl.textContent = `${totalPoints} ⚡`;
+
+      li.appendChild(userBlock);
+      li.appendChild(pointsEl);
       list.appendChild(li);
     });
+  }
+
+  async function openProfileView(forceRefresh = false) {
+    const user = await ensureProfileData(forceRefresh);
+    populateProfile(user);
+    showMenuView('profile');
+  }
+
+  async function openReferralView() {
+    const user = await ensureProfileData();
+    const referralInput = document.getElementById('referral-link');
+    const referralCode = (user && user.user_id) || currentReferralId || '';
+    if (referralInput) {
+      referralInput.value = referralCode ? `https://t.me/testofcodebot?start=${referralCode}` : '';
+    }
+    const countEl = document.getElementById('referral-count');
+    const countLabel = translations[currentLanguage]['referral_count'] || 'Referrals: {0}';
+    const count = user && Array.isArray(user.referrals) ? user.referrals.length : 0;
+    if (countEl) {
+      countEl.textContent = countLabel.replace('{0}', count);
+    }
+    showMenuView('referral');
+  }
+
+  async function openLeaderboardView() {
+    try {
+      const res = await fetch(`${API_BASE}/api/users`);
+      const users = res.ok ? await res.json() : [];
+      populateLeaderboard(Array.isArray(users) ? users : []);
+    } catch (e) {
+      console.error('Failed to load leaderboard', e);
+      populateLeaderboard([]);
+    }
+    showMenuView('leaderboard');
   }
 
   /**
@@ -681,8 +822,10 @@
     document.head.appendChild(style);
     
     await loadTranslations();
-    ensureUserId();
+    captureTelegramUser();
+    const existingProfile = await ensureProfileData();
     applyTranslations();
+    applyProfileSelections(existingProfile || cachedProfile);
     setupKeyboardHandling();
     setupCodeInputInteractions();
 
@@ -699,9 +842,17 @@
       });
     });
 
+    if (existingProfile) {
+      hasCompletedOnboarding = true;
+      try {
+        localStorage.setItem('onboarding_complete', 'true');
+      } catch (e) {
+        console.warn('Unable to persist onboarding flag', e);
+      }
+    }
+
     // If onboarding completed previously show main menu immediately
     if (hasCompletedOnboarding) {
-      // Hide all progress bars
       document.querySelectorAll('.progress-container-ios26, .progress-container').forEach(el => {
         el.classList.add('hidden');
       });
@@ -709,7 +860,12 @@
       document.getElementById('step2').classList.add('hidden');
       document.getElementById('step3').classList.add('hidden');
       document.getElementById('bottom-menu').classList.remove('hidden');
-      showMenuView('profile');
+      const profileBtn = document.querySelector('#bottom-menu .menu-btn[data-view="profile"]');
+      if (profileBtn) {
+        document.querySelectorAll('#bottom-menu .menu-btn').forEach(b => b.classList.remove('active'));
+        profileBtn.classList.add('active');
+      }
+      await openProfileView();
     } else {
       console.log('Showing step 1 and updating progress to step 1');
       showScreen('step1');
@@ -752,57 +908,59 @@
     // Step 3 submit
     document.getElementById('step3-submit').addEventListener('click', async () => {
       if (!validateStep3()) return;
-      // Build user object
-      // Gather user info from Telegram if available
-      let telegramId = null;
-      let username = '';
-      let firstName = '';
-      let photoUrl = '';
-      let telegramUser = null;
-      
-      if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
-        telegramUser = Telegram.WebApp.initDataUnsafe.user;
-        telegramId = telegramUser.id;
-        username = telegramUser.username || '';
-        firstName = telegramUser.first_name || '';
-        photoUrl = telegramUser.photo_url || '';
-        console.log('Telegram user data collected:', telegramUser);
-      } else {
-        console.log('No Telegram user data available during submission');
+
+      const telegramUser = captureTelegramUser();
+      let telegramId = telegramUser && telegramUser.id != null ? telegramUser.id : null;
+      if (telegramId == null) {
+        const fallback = getTelegramIdForRequest();
+        if (fallback != null && fallback !== '') telegramId = fallback;
       }
-      
-      const nowIso = new Date().toISOString();
+
+      const storedProfile = cachedProfile || existingProfile || null;
+      const username = (telegramUser && telegramUser.username) || (storedProfile && storedProfile.username) || '';
+      const firstName = (telegramUser && telegramUser.first_name) || (storedProfile && storedProfile.first_name) || '';
+      const photoUrl = (telegramUser && telegramUser.photo_url) || (storedProfile && storedProfile.photo_url) || '';
+
       const reelLink = document.getElementById('reel-link').value.trim();
       const code = Array.from(document.querySelectorAll('.code-digit')).map(i => i.value.trim()).join('');
-      
-      // Если введен код администратора, используем тестовые данные
       const finalReelLink = code === '123456789' ? 'https://www.instagram.com/reel/C123456789/' : reelLink;
-      const finalCode = code === '123456789' ? '987654321' : code; // Можно использовать другой код для администратора
-      
-      // Создаем объект userData с Telegram данными
+
+      if (telegramId == null) {
+        const errorEl = document.getElementById('step3-error');
+        errorEl.textContent = 'Telegram ID is required to save your profile.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
       const userData = {
-        user_id: currentUserId,
-        telegram_id: telegramId || currentUserId,
-        username: username,
+        telegram_id: telegramId,
+        username,
         first_name: firstName,
+        photo_url: photoUrl,
         region: localStorage.getItem('region'),
         language: localStorage.getItem('language'),
         utc_offset: localStorage.getItem('utc_offset'),
-        utc_offset: localStorage.getItem('utc_offset'),
-        reels_link: finalReelLink,
-        code: finalCode,
-        reels_status: 'pending',
-        updated_at: nowIso,
-        moderated_at: null,
-        points: 0,
-        daily_points: 0,
-        last_reset: new Date().toDateString(),
-        photo_url: photoUrl,
-        referrals: []
+        reels_link: finalReelLink || null,
+        reels_status: 'pending'
       };
-      
+
+      if (currentReferralId) {
+        userData.user_id = currentReferralId;
+      }
+      if (!cachedProfile) {
+        userData.points_total = 0;
+        userData.points_current = 0;
+        userData.daily_points = 0;
+        userData.referrals = [];
+      } else if (Array.isArray(cachedProfile.referrals)) {
+        userData.referrals = cachedProfile.referrals;
+      }
+      if (cachedProfile && cachedProfile.referrer_id) {
+        userData.referrer_id = cachedProfile.referrer_id;
+      }
+
       console.log('User data to be saved:', userData);
-      
+
       // Save locally
       localStorage.setItem('onboarding_complete', 'true');
       hasCompletedOnboarding = true;
@@ -823,7 +981,22 @@
       }
       
       console.log('User data saved successfully', saveResult.data || {});
-      
+      if (saveResult.data && typeof saveResult.data === 'object') {
+        cachedProfile = saveResult.data;
+        if (saveResult.data.user_id) {
+          currentReferralId = saveResult.data.user_id;
+          try {
+            localStorage.setItem('referral_id', saveResult.data.user_id);
+          } catch (e) {
+            console.warn('Unable to persist referral_id after save', e);
+          }
+        }
+        populateProfile(saveResult.data);
+      } else {
+        await ensureProfileData(true);
+        populateProfile(cachedProfile);
+      }
+
       // Show success overlay instead of a separate screen.  The overlay
       // appears on top of the current view and hides itself when the
       // user presses OK.  After closing the overlay we reveal the
@@ -836,9 +1009,9 @@
         overlay.style.opacity = '1';
       }, 10);
       const okBtn = document.getElementById('success-ok');
-      okBtn.onclick = () => {
+      okBtn.onclick = async () => {
         overlay.style.opacity = '0';
-        setTimeout(() => {
+        setTimeout(async () => {
           overlay.classList.add('hidden');
           // Hide onboarding and progress completely
           // Hide all progress bars
@@ -849,8 +1022,10 @@
           document.getElementById('step2').classList.add('hidden');
           document.getElementById('step3').classList.add('hidden');
           document.getElementById('bottom-menu').classList.remove('hidden');
-          // Navigate to the profile view
-          document.querySelector('#bottom-menu .menu-btn[data-view="profile"]').click();
+          document.querySelectorAll('#bottom-menu .menu-btn').forEach(b => b.classList.remove('active'));
+          const profileBtn = document.querySelector('#bottom-menu .menu-btn[data-view="profile"]');
+          if (profileBtn) profileBtn.classList.add('active');
+          await openProfileView(true);
         }, 300);
       };
     });
@@ -861,46 +1036,14 @@
     document.querySelectorAll('#bottom-menu .menu-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const view = btn.getAttribute('data-view');
-        // Highlight active button (optional)
         document.querySelectorAll('#bottom-menu .menu-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         if (view === 'referral') {
-        const referralLink = `https://t.me/testofcodebot?start=${currentUserId}`;
-          document.getElementById('referral-link').value = referralLink;
-          // Load user data to count referrals
-          try {
-            const res = await fetch(`${API_BASE}/api/users?user_id=${currentUserId}`);
-            const user = res.ok ? await res.json() : {};
-            const count = (user.referrals || []).length;
-            const countLabel = translations[currentLanguage]['referral_count'] || 'Referrals: {0}';
-            document.getElementById('referral-count').textContent = countLabel.replace('{0}', count);
-          } catch (e) {
-            console.error('Failed to load referral count', e);
-            document.getElementById('referral-count').textContent = '';
-          }
-          showMenuView('referral');
+          await openReferralView();
         } else if (view === 'profile') {
-          // fetch user data
-          try {
-            console.log('Fetching user data for user_id:', currentUserId);
-            const res = await fetch(`${API_BASE}/api/users?user_id=${currentUserId}`);
-            console.log('User data fetch response status:', res.status);
-            const user = res.ok ? await res.json() : {};
-            console.log('User data received:', user);
-            populateProfile(user);
-          } catch (e) {
-            console.error('Failed to load profile', e);
-          }
-          showMenuView('profile');
+          await openProfileView();
         } else if (view === 'leaderboard') {
-          try {
-            const res = await fetch(`${API_BASE}/api/users`);
-            const users = res.ok ? await res.json() : [];
-            populateLeaderboard(users);
-          } catch (e) {
-            console.error('Failed to load leaderboard', e);
-          }
-          showMenuView('leaderboard');
+          await openLeaderboardView();
         }
       });
     });
@@ -922,13 +1065,18 @@
       // Show confirmation dialog
       if (confirm('Are you sure you want to logout?')) {
         // Clear all user data from localStorage
-        localStorage.removeItem('user_id');
         localStorage.removeItem('region');
         localStorage.removeItem('language');
+        localStorage.removeItem('utc_offset');
+        localStorage.removeItem('referral_id');
+        localStorage.removeItem('telegram_id');
         localStorage.removeItem('onboarding_complete');
-        
+
         // Reset user variables
-        currentUserId = null;
+        currentReferralId = null;
+        cachedProfile = null;
+        cachedTelegramUser = null;
+        currentTelegramId = null;
         hasCompletedOnboarding = false;
         
         // Hide menu and show onboarding screens
@@ -936,6 +1084,7 @@
         document.getElementById('referral-view').classList.add('hidden');
         document.getElementById('profile-view').classList.add('hidden');
         document.getElementById('leaderboard-view').classList.add('hidden');
+        document.querySelectorAll('#bottom-menu .menu-btn').forEach(b => b.classList.remove('active'));
         
         // Show onboarding screens
         document.getElementById('step1').classList.remove('hidden');

@@ -128,13 +128,21 @@ html, body {
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Roboto, Segoe UI, Arial, sans-serif;
   background: var(--background);
-  height: 100vh;
+  min-height: 100vh;
   overflow-x: hidden;
-  overflow-y: auto;
   color: var(--text-primary);
   font-smooth: always;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation;
+  -ms-touch-action: manipulation;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  overflow-y: auto;
+  padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 16px);
 }
 
 /* Introduction screen styles */
@@ -240,8 +248,11 @@ body {
 }
 
 #app {
-  width: 100%;
-  max-width: 100vw;
+  width: min(420px, 100%);
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 12px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
   overflow-x: hidden; /* Предотвращаем горизонтальный скролл для контейнера приложения */
 }
 
@@ -258,7 +269,8 @@ header {
   border-radius: 20px;
   box-shadow: var(--glass-shadow);
   transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
-  width: min(420px, calc(100% - 24px));
+  width: 100%;
+  max-width: 100%;
   margin: 1rem auto;
 }
 
@@ -350,7 +362,7 @@ input:checked + .slider:before {
 /* Адаптивность для маленьких экранов */
 @media (max-width: 480px) {
   header {
-    width: min(420px, calc(100% - 24px));
+    width: 100%;
     padding: 1.2rem 1rem 0.5rem;
     border-radius: 16px;
   }
@@ -488,7 +500,7 @@ input:checked + .slider:before {
 
 /* Screen container should fit on mobile devices */
 .screen {
-  width: min(420px, calc(100% - 24px));
+  width: 100%;
   margin: 0 auto;
   padding: 1.25rem;
   display: flex;
@@ -926,26 +938,26 @@ input:checked + .slider:before {
 
 .bottom-menu {
   position: fixed;
-  bottom: 20px; /* Отступ от нижнего края экрана */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
   left: 50%;
   transform: translateX(-50%);
-  width: fit-content; /* Ширина по содержимому */
+  width: min(360px, calc(100vw - 32px));
   display: flex;
   justify-content: space-around;
-  padding: 12px 16px; /* Уменьшенные отступы */
+  padding: 12px 18px; /* Уменьшенные отступы */
   box-sizing: border-box;
   /* Улучшенный стиль жидкого стекла iOS 26 */
   background: rgba(255, 255, 255, 0.4); /* Более прозрачный фон */
   backdrop-filter: blur(30px) saturate(200%); /* Усиленный эффект размытия */
   -webkit-backdrop-filter: blur(30px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.3); /* Более светлая граница */
-  box-shadow: 
+  box-shadow:
     0 4px 16px rgba(0, 0, 0, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.2); /* Внутренняя тень для глубины */
   z-index: 999;
   border-radius: 30px; /* Более овальная форма */
   min-width: 280px; /* Минимальная ширина */
-  max-width: 95%; /* Максимальная ширина увеличена */
+  max-width: calc(100vw - 32px); /* Максимальная ширина увеличена */
 }
 
 .menu-btn {
@@ -1028,7 +1040,7 @@ input:checked + .slider:before {
 }
 
 .menu-view {
-  width: min(420px, calc(100% - 24px));
+  width: 100%;
   margin: 0 auto 4.5rem auto;
   padding: 1.25rem;
   display: flex;
@@ -1058,40 +1070,72 @@ input:checked + .slider:before {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+.reel-link.placeholder {
+  color: var(--text-secondary);
+}
+
 .leaderboard-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.leaderboard-list li {
+.leaderboard-item {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 0.75rem 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
 }
 
-.leaderboard-list li:hover {
-  background: rgba(0, 122, 255, 0.05);
-  border-radius: 12px;
-  padding: 0.75rem;
-  transform: translateX(5px);
-}
-
-.leaderboard-list li:last-child {
+.leaderboard-item:last-child {
   border-bottom: none;
 }
 
-.leaderboard-list li span:first-child {
-  font-weight: 500;
+.leaderboard-item:hover {
+  background: rgba(0, 122, 255, 0.06);
+  border-radius: 16px;
+  padding: 0.75rem 0.5rem;
+  transform: translateY(-2px);
 }
 
-.leaderboard-list li span:last-child {
+.leaderboard-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.leaderboard-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  object-fit: cover;
+  background: linear-gradient(135deg, #007AFF, #AF52DE);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.leaderboard-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.leaderboard-username {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.leaderboard-name {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.leaderboard-points {
   font-weight: 600;
   color: var(--primary-color);
-}
-
-.leaderboard-list li span {
   font-size: 1rem;
+  white-space: nowrap;
 }
