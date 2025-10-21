@@ -12,6 +12,7 @@ production you should use a proper database and secure access control.
 
 import json
 import os
+import re
 import sys
 import threading
 from datetime import datetime
@@ -62,6 +63,7 @@ def _ensure_urllib3_appengine_stub() -> None:
 _ensure_urllib3_appengine_stub()
 
 from telegram import Update
+from telegram.error import InvalidToken
 from telegram.ext import CallbackContext, CommandHandler, Updater
 
 from flask import Flask, request, jsonify
@@ -72,6 +74,91 @@ DATA_FILE = Path(__file__).parent / 'user_data' / 'user_data.json'
 
 # Create Flask app for simple REST API
 api_app = Flask(__name__)
+
+_TOKEN_PATTERN = re.compile(r'^\d{4,}:[A-Za-z0-9_-]{10,}$')
+
+
+def _parse_env_file(path: Path) -> Dict[str, str]:
+    result: Dict[str, str] = {}
+    try:
+        text = path.read_text(encoding='utf-8')
+    except FileNotFoundError:
+        return result
+    except OSError:
+        return result
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        if '=' not in stripped:
+            continue
+        key, value = stripped.split('=', 1)
+        raw_value = value.strip()
+        if len(raw_value) >= 2 and raw_value[0] == raw_value[-1] and raw_value[0] in {'"', '\''}:
+            raw_value = raw_value[1:-1]
+        result[key.strip()] = raw_value
+    return result
+
+
+def _sanitise_token(raw: str) -> str:
+    token = raw.strip()
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in {'"', '\''}:
+        token = token[1:-1]
+    token = token.strip()
+    if token.lower().startswith('bot '):
+        token = token.split(None, 1)[1].strip()
+    if token.lower().startswith('bot') and token.lower() != 'bot':
+        token = token[3:].strip()
+    if token.lower().startswith('token '):
+        token = token.split(None, 1)[1].strip()
+    token = token.replace('https://t.me/', '')
+    token = token.replace('http://t.me/', '')
+    token = token.replace('telegram.me/', '')
+    token = token.strip()
+    if token.startswith('@'):
+        token = token[1:].strip()
+    return token
+
+
+def _is_valid_token(token: str) -> bool:
+    return bool(_TOKEN_PATTERN.fullmatch(token))
+
+
+def load_bot_token() -> str:
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if not token:
+        # Look for local .env files without requiring python-dotenv
+        candidates = [
+            Path.cwd() / '.env',
+            Path(__file__).resolve().parent / '.env',
+        ]
+        seen: set[Path] = set()
+        for candidate in candidates:
+            try:
+                resolved = candidate.resolve()
+            except OSError:
+                continue
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            values = _parse_env_file(resolved)
+            if values.get('TELEGRAM_BOT_TOKEN'):
+                token = values['TELEGRAM_BOT_TOKEN']
+                break
+    if not token:
+        token_file = Path(__file__).resolve().parent / 'bot_token.txt'
+        if token_file.exists():
+            token = token_file.read_text(encoding='utf-8').strip()
+    if not token:
+        raise RuntimeError('Please set TELEGRAM_BOT_TOKEN in the environment, .env file, or bot_token.txt')
+
+    token = _sanitise_token(token)
+    if not _is_valid_token(token):
+        raise RuntimeError('The TELEGRAM_BOT_TOKEN value appears invalid. Copy it exactly as provided by BotFather.')
+
+    os.environ['TELEGRAM_BOT_TOKEN'] = token
+    return token
 
 
 def generate_user_id() -> str:
@@ -84,6 +171,20 @@ def now_iso() -> str:
 
 def last_online_str() -> str:
     return datetime.utcnow().strftime('%a %b %d %Y')
+
+
+def to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {'1', 'true', 'yes', 'y', 'on'}:
+            return True
+        if normalized in {'0', 'false', 'no', 'n', 'off', ''}:
+            return False
+    return False
 
 
 def normalise_user(record: Dict[str, Any]) -> Dict[str, Any]:
@@ -131,6 +232,7 @@ def normalise_user(record: Dict[str, Any]) -> Dict[str, Any]:
     reels_link = data.get('reels_link')
     data['reels_link'] = reels_link if reels_link else None
     data['reels_status'] = data.get('reels_status') or 'pending'
+    data['nine_digit_code'] = to_bool(data.get('nine_digit_code'))
 
     data['updated_at'] = data.get('updated_at') or now_iso()
     data['moderated_at'] = data.get('moderated_at') or None
@@ -206,6 +308,9 @@ def merge_user(existing: Optional[Dict[str, Any]], incoming: Dict[str, Any]) -> 
             data['moderated_at'] = now_iso()
     if incoming.get('moderated_at'):
         data['moderated_at'] = incoming['moderated_at']
+
+    if 'nine_digit_code' in incoming:
+        data['nine_digit_code'] = to_bool(incoming['nine_digit_code'])
 
     data['updated_at'] = now_iso()
     data['last_online'] = last_online_str()
@@ -365,15 +470,16 @@ def start_command(update: Update, context: CallbackContext) -> None:
 
 def main() -> None:
     """Create and run the bot using the Telegram bot token."""
-    token = os.getenv('TELEGRAM_BOT_TOKEN')
-    if not token:
-        raise RuntimeError('Please set the TELEGRAM_BOT_TOKEN environment variable')
+    token = load_bot_token()
     # Start the REST API server in a separate thread
     api_thread = threading.Thread(target=run_api_server, daemon=True)
     api_thread.start()
 
     # Set up Telegram bot
-    updater = Updater(token, use_context=True)
+    try:
+        updater = Updater(token, use_context=True)
+    except InvalidToken as exc:
+        raise RuntimeError('Telegram rejected the TELEGRAM_BOT_TOKEN. Double-check the token value.') from exc
     dp = updater.dispatcher
     dp.add_handler(CommandHandler('start', start_command, pass_args=True))
     # Future commands can be added here

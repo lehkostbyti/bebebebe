@@ -53,18 +53,19 @@
 
 ### Поля пользователя (поддерживаются сервером)
 ```
-{
+{ 
   telegram_id, user_id, username, first_name, photo_url,
   region, language, utc_offset,
   referrals: [], referrer_id,
   points_total, points_current, daily_points, last_reset,
-  reels_link, reels_status,
+  reels_link, reels_status, nine_digit_code,
   updated_at, moderated_at, last_online
 }
 ```
 - `reels_link` проверяется на формат `https://www.instagram.com/reel/...`
 - `utc_offset` в формате `UTC±HH:MM` (например, `UTC-03:00`)
 - `language`: `en|es|fr|pt`; `region`: `USA|Mexico|Canada|BRAZIL`
+- `nine_digit_code`: `true/false` — отмечает, что пользователь ввёл корректный девятизначный код при онбординге
 - При смене `reels_status` сервер проставляет `moderated_at`.
 - Сервер **не затирает валидные старые значения**, если пришли пустые/невалидные данные (см. ниже).
 
@@ -102,6 +103,7 @@
 - Перенесена файловая логика из `old_version` (надёжное чтение/запись, атомарное сохранение, автосоздание каталога).
 - Объединённая схема данных пользователя (поддержка `photo_url`, `username`, `utc_offset`, `points_total/points_current`, совместимость со старым `points`).
 - Добавлены бэкенд‑валидации: `reels_link`, формат `utc_offset`.
+- Добавлен признак `nine_digit_code` (фронтенд/сервер/бот) для фиксации прохождения онбординга.
 - Сохранена совместимость API: `POST /save_user_data`, `GET /get_user_data` работают как раньше.
 - Добавлен отладочный эндпоинт `GET /debug/users`.
 - README переписан на русском: инструкции запуска и поведение при неполных данных.

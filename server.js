@@ -76,6 +76,22 @@ function isValidUtcOffset(s) {
 function nowIso() { return new Date().toISOString(); }
 function lastOnlineStr() { return new Date().toDateString(); }
 
+function coerceBoolean(value, fallback = false) {
+  if (value === true) return true;
+  if (value === false) return false;
+  if (typeof value === 'number') {
+    if (Number.isNaN(value)) return fallback;
+    return value !== 0;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return false;
+    if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false;
+  }
+  return fallback;
+}
+
 function normalizeTelegramId(value) {
   if (value == null || value === '') return null;
   const numeric = Number(value);
@@ -146,6 +162,8 @@ function normalizeUserRecord(record) {
   }
   base.reels_status = isNonEmptyString(base.reels_status) ? base.reels_status : 'pending';
 
+  base.nine_digit_code = coerceBoolean(base.nine_digit_code, false);
+
   base.updated_at = base.updated_at || nowIso();
   base.moderated_at = base.moderated_at || null;
   base.last_online = base.last_online || lastOnlineStr();
@@ -204,6 +222,10 @@ function mergeUser(existing, incoming = {}) {
     if (prev && prev !== out.reels_status) out.moderated_at = nowIso();
   }
   if (isNonEmptyString(incoming.moderated_at)) out.moderated_at = incoming.moderated_at;
+
+  if ('nine_digit_code' in incoming) {
+    out.nine_digit_code = coerceBoolean(incoming.nine_digit_code, out.nine_digit_code);
+  }
 
   // timestamps
   out.updated_at = nowIso();
