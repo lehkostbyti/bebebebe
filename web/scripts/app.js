@@ -11,6 +11,8 @@
   let currentLanguage = localStorage.getItem('language') || 'en';
   let currentTheme = 'light';
   let hasCompletedOnboarding = localStorage.getItem('onboarding_complete') === 'true';
+  const GEOAPIFY_KEY = '470ed5f201444d7ab192a18d51438995';
+  const DEFAULT_STORIES_URL = 'https://www.instagram.com/';
   let currentTelegramId = localStorage.getItem('telegram_id') || null;
   let currentReferralId = localStorage.getItem('referral_id') || null;
   let cachedProfile = null;
@@ -19,6 +21,9 @@
   let pendingReferrerCode = null;
   let pendingReferrerLoaded = false;
   let bootstrapAttempted = false;
+  let currentCitySelection = null;
+  let missionProgress = 0;
+  let storiesModalDismissed = localStorage.getItem('stories_modal_hidden') === 'true';
 
   function getStoredTheme() {
     try {
@@ -147,6 +152,30 @@
 
   function isValidUtcOffset(value) {
     return typeof value === 'string' && /^UTC[+-]\d{2}:\d{2}$/.test(value);
+  }
+
+  function formatUtcOffset(seconds) {
+    if (!Number.isFinite(seconds)) return null;
+    const sign = seconds >= 0 ? '+' : '-';
+    const abs = Math.abs(seconds);
+    const hours = Math.floor(abs / 3600);
+    const minutes = Math.floor((abs % 3600) / 60);
+    return `UTC${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  }
+
+  function normalizeUtcOffset(value) {
+    if (!value) return null;
+    if (isValidUtcOffset(value)) return value;
+    if (typeof value === 'string' && /^UTC[+-]\d{1,2}/.test(value)) {
+      const match = value.match(/UTC([+-])(\d{1,2})(?::?(\d{2}))?/);
+      if (match) {
+        const sign = match[1];
+        const hours = match[2].padStart(2, '0');
+        const minutes = (match[3] || '00').padStart(2, '0');
+        return `UTC${sign}${hours}:${minutes}`;
+      }
+    }
+    return null;
   }
 
   function isValidReelLink(link) {
@@ -432,7 +461,9 @@
       points_total: 0,
       points_current: 0,
       daily_points: 0,
-      referrals: []
+      referrals: [],
+      mission_progress: missionProgress || 0,
+      stories_modal_hidden: storiesModalDismissed
     };
 
     const identityFields = [
@@ -599,10 +630,33 @@
           console.warn('Unable to persist utc_offset', e);
         }
       }
+      if (profile.city_label) {
+        try {
+          localStorage.setItem('city_label', profile.city_label);
+        } catch (e) {
+          console.warn('Unable to persist city label', e);
+        }
+      }
+      if (profile.city || profile.region || profile.country) {
+        currentCitySelection = {
+          city: profile.city || '',
+          region: profile.region || '',
+          country: profile.country || '',
+          utcOffset: profile.utc_offset || 'UTC+00:00',
+          label: profile.city_label || buildCityLabel(profile.city, profile.region, profile.country),
+          timezoneId: profile.timezone || null
+        };
+      }
       if (profile.referrer_id) {
         persistPendingReferrer(profile.referrer_id);
       }
       persistOnboardingCompletion(isProfileComplete(profile));
+      missionProgress = Number(profile.mission_progress || 0);
+      storiesModalDismissed = profile.stories_modal_hidden != null
+        ? coerceBoolean(profile.stories_modal_hidden)
+        : storiesModalDismissed;
+      updateStatsBoard(profile);
+      updateAdvice(profile);
     }
     if (!profile) {
       persistOnboardingCompletion(false);
@@ -611,15 +665,21 @@
   }
 
   function applyProfileSelections(user) {
-    const regionSelect = document.getElementById('region-select');
-    const languageSelect = document.getElementById('language-select');
-    const tzSelect = document.getElementById('timezone-select');
-    const regionValue = (user && user.region) || localStorage.getItem('region');
-    const languageValue = (user && user.language) || localStorage.getItem('language');
-    const tzValue = (user && user.utc_offset) || localStorage.getItem('utc_offset');
-    if (regionSelect && regionValue) regionSelect.value = regionValue;
-    if (languageSelect && languageValue) languageSelect.value = languageValue;
-    if (tzSelect && tzValue) tzSelect.value = tzValue;
+    const languageValue = (user && user.language) || localStorage.getItem('language') || currentLanguage;
+    if (languageValue) {
+      currentLanguage = languageValue;
+      safeSetItem('language', languageValue);
+    }
+    document.querySelectorAll('.language-option').forEach(btn => {
+      const lang = btn.getAttribute('data-language');
+      if (!lang) return;
+      if (lang === languageValue) {
+        btn.classList.add('selected');
+      } else {
+        btn.classList.remove('selected');
+      }
+    });
+    updateCitySelectionFromProfile(user || cachedProfile || null);
   }
 
   /**
@@ -697,6 +757,263 @@
         seg.classList.add('pulse');
       }
     });
+  }
+
+  function updateMissionDots(step) {
+    missionProgress = step;
+    const container = document.getElementById('mission-progress');
+    if (!container) return;
+    container.classList.toggle('hidden', step <= 0);
+    container.querySelectorAll('.mission-dot').forEach(dot => {
+      const dotStep = Number(dot.getAttribute('data-step'));
+      if (!Number.isFinite(dotStep)) return;
+      if (step >= dotStep) {
+        dot.classList.add('active');
+      } else {
+        dot.classList.remove('active');
+      }
+    });
+  }
+
+  function showMissionScreen(id) {
+    document.querySelectorAll('.mission-screen').forEach(section => {
+      if (section.id === id) {
+        section.classList.remove('hidden');
+        section.style.opacity = '1';
+      } else {
+        section.classList.add('hidden');
+      }
+    });
+  }
+
+  function enableMenuAccess(enabled) {
+    const menu = document.getElementById('bottom-menu');
+    if (!menu) return;
+    if (enabled) {
+      menu.classList.remove('hidden');
+      menu.classList.remove('locked');
+    } else {
+      menu.classList.add('locked');
+      menu.classList.remove('hidden');
+    }
+  }
+
+  function buildCityLabel(city, region, country) {
+    const parts = [];
+    if (isValidString(city)) parts.push(city);
+    if (isValidString(region)) parts.push(region);
+    if (isValidString(country)) parts.push(country);
+    return parts.join(', ');
+  }
+
+  function renderCitySuggestions(suggestions) {
+    const list = document.getElementById('city-suggestions');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!Array.isArray(suggestions) || !suggestions.length) {
+      list.style.display = 'none';
+      return;
+    }
+    suggestions.forEach(item => {
+      const li = document.createElement('li');
+      li.tabIndex = 0;
+      li.textContent = item.label;
+      li.addEventListener('click', () => applyCitySelection(item));
+      li.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          applyCitySelection(item);
+        }
+      });
+      list.appendChild(li);
+    });
+    list.style.display = 'block';
+  }
+
+  function applyCitySelection(selection) {
+    if (!selection) return;
+    currentCitySelection = selection;
+    const input = document.getElementById('city-input');
+    const list = document.getElementById('city-suggestions');
+    const hint = document.getElementById('city-confirmed');
+    const changeBtn = document.getElementById('change-city');
+    if (input) {
+      input.value = selection.label;
+      input.classList.add('confirmed');
+      input.setAttribute('data-selected', 'true');
+    }
+    if (list) {
+      list.innerHTML = '';
+      list.style.display = 'none';
+    }
+    if (hint) {
+      hint.classList.remove('hidden');
+      hint.textContent = `${selection.label} — ${selection.utcOffset}`;
+    }
+    if (changeBtn) {
+      changeBtn.classList.remove('hidden');
+    }
+  }
+
+  function clearCitySelection() {
+    currentCitySelection = null;
+    const input = document.getElementById('city-input');
+    const hint = document.getElementById('city-confirmed');
+    const list = document.getElementById('city-suggestions');
+    if (input) {
+      input.value = '';
+      input.classList.remove('confirmed');
+      input.removeAttribute('data-selected');
+      input.focus();
+    }
+    if (hint) hint.classList.add('hidden');
+    if (list) {
+      list.innerHTML = '';
+      list.style.display = 'none';
+    }
+  }
+
+  async function fetchCitySuggestions(query) {
+    if (!query || query.trim().length < 3) {
+      renderCitySuggestions([]);
+      return;
+    }
+    try {
+      const url = new URL('https://api.geoapify.com/v1/geocode/autocomplete');
+      url.searchParams.set('text', query.trim());
+      url.searchParams.set('limit', '6');
+      url.searchParams.set('type', 'city');
+      url.searchParams.set('format', 'json');
+      url.searchParams.set('apiKey', GEOAPIFY_KEY);
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const payload = await res.json();
+      const rows = Array.isArray(payload?.results)
+        ? payload.results
+        : Array.isArray(payload?.features)
+          ? payload.features.map(entry => entry && (entry.properties || entry))
+          : [];
+      const suggestions = rows
+        .map(props => {
+            const city = props.city || props.name || props.address_line1 || '';
+            const region = props.state || props.county || props.region || '';
+            const country = props.country || props.country_code || '';
+            const timezone = props.timezone || {};
+            const utcFromSeconds = formatUtcOffset(Number(timezone.offset_STD_seconds));
+            const utc = normalizeUtcOffset(timezone.offset_STD || utcFromSeconds || timezone.name);
+            return {
+              city: city || '',
+              region: region || '',
+              country: country || '',
+              label: buildCityLabel(city, region, country),
+              utcOffset: utc || 'UTC+00:00',
+              timezoneId: timezone.name || null
+            };
+          })
+        .filter(item => isValidString(item.label));
+      renderCitySuggestions(suggestions);
+    } catch (e) {
+      console.warn('City lookup failed', e);
+      renderCitySuggestions([]);
+    }
+  }
+
+  function updateCitySelectionFromProfile(user) {
+    const input = document.getElementById('city-input');
+    if (!input) return;
+    const changeBtn = document.getElementById('change-city');
+    const hint = document.getElementById('city-confirmed');
+    const city = user?.city || user?.region || null;
+    const region = user?.region_name || user?.region || user?.state || null;
+    const country = user?.country || null;
+    const utc = user?.utc_offset || null;
+    const label = user?.city_label || buildCityLabel(city, region, country);
+    if (label) {
+      currentCitySelection = {
+        city: city || '',
+        region: region || '',
+        country: country || '',
+        utcOffset: utc || 'UTC+00:00',
+        label,
+        timezoneId: user?.timezone || null
+      };
+      input.value = label;
+      input.classList.add('confirmed');
+      input.setAttribute('data-selected', 'true');
+      if (hint && (utc || label)) {
+        hint.classList.remove('hidden');
+        hint.textContent = utc ? `${label} — ${utc}` : label;
+      }
+      if (changeBtn) {
+        changeBtn.classList.remove('hidden');
+      }
+    }
+  }
+
+  function resolveStoriesUrl(profile) {
+    const meta = document.querySelector('meta[name="stories-account-url"]');
+    const fromMeta = meta && typeof meta.content === 'string' ? meta.content.trim() : '';
+    if (profile && isValidString(profile.stories_account_url)) return profile.stories_account_url;
+    if (isValidString(fromMeta)) return fromMeta;
+    if (typeof window !== 'undefined' && isValidString(window.__STORIES_ACCOUNT_URL__)) {
+      return window.__STORIES_ACCOUNT_URL__;
+    }
+    return DEFAULT_STORIES_URL;
+  }
+
+  function openStoriesLink(profile) {
+    const url = resolveStoriesUrl(profile || cachedProfile);
+    if (window.Telegram && Telegram.WebApp) {
+      try {
+        Telegram.WebApp.openLink(url, { try_instant_view: false });
+      } catch (e) {
+        window.open(url, '_blank', 'noopener');
+      }
+    } else {
+      window.open(url, '_blank', 'noopener');
+    }
+  }
+
+  function updateStatsBoard(user) {
+    const reels = Number(user?.reels_launched_total || 0);
+    const premium = user?.telegram_meta?.is_premium ? 1 : 0;
+    const boardReels = document.getElementById('board-reels-count');
+    const boardSpots = document.getElementById('board-spots-count');
+    const boardPremium = document.getElementById('board-premium-count');
+    if (boardReels) boardReels.textContent = `${Math.min(1500, reels)} / 1500`;
+    if (boardSpots) boardSpots.textContent = `${Math.min(500, 50 + reels * 5)} / 500`;
+    if (boardPremium) boardPremium.textContent = `${premium ? 12 + reels : 6 + reels}`;
+  }
+
+  const adviceTips = [
+    'Remember to keep your Reel under 15 seconds for the fastest moderation.',
+    'Add trending audio to double your chances of making the explore page.',
+    'Premium tip: upload two extra Reels to lock your slot in the priority queue.',
+    'Share your Reel link with three friends to boost saves and reach.'
+  ];
+
+  function getAdviceText(reelsCount = 0) {
+    if (reelsCount <= 0) return adviceTips[0];
+    if (reelsCount === 1) return adviceTips[1];
+    if (reelsCount === 2) return adviceTips[2];
+    return adviceTips[3];
+  }
+
+  function updateAdvice(user) {
+    const card = document.getElementById('advice-card');
+    const text = document.getElementById('advice-text');
+    if (!card || !text) return;
+    const count = Number(user?.reels_launched_total || 0);
+    text.textContent = getAdviceText(count);
+  }
+
+  function persistStoriesModalPreference(hidden) {
+    storiesModalDismissed = !!hidden;
+    try {
+      localStorage.setItem('stories_modal_hidden', hidden ? 'true' : 'false');
+    } catch (e) {
+      console.warn('Unable to persist modal preference', e);
+    }
   }
 
   /**
@@ -893,6 +1210,26 @@
     }
   }
 
+  async function persistMissionState(update = {}) {
+    const payload = { ...update };
+    if (payload.mission_progress != null) {
+      const numeric = Number(payload.mission_progress);
+      if (Number.isFinite(numeric)) {
+        payload.mission_progress = Math.max(numeric, missionProgress || 0);
+      } else {
+        delete payload.mission_progress;
+      }
+    }
+    const result = await saveUserData(payload);
+    if (result.ok && result.data) {
+      cachedProfile = result.data;
+      missionProgress = Number(result.data.mission_progress || missionProgress || 0);
+      updateStatsBoard(result.data);
+      updateAdvice(result.data);
+    }
+    return result;
+  }
+
   /**
    * Populate profile view from stored data.
    */
@@ -906,6 +1243,10 @@
     const editPanel = document.getElementById('reel-edit-panel');
     const editInput = document.getElementById('profile-link-input');
     const editErrorEl = document.getElementById('reel-edit-error');
+    const locationEl = document.getElementById('profile-location');
+    const languageEl = document.getElementById('profile-language');
+    const premiumReel2 = document.getElementById('premium-reel-2');
+    const premiumReel3 = document.getElementById('premium-reel-3');
 
     if (!user && cachedProfile) {
       user = cachedProfile;
@@ -928,6 +1269,23 @@
     const avatarSrc = (user && user.photo_url) || (telegramUser && telegramUser.photo_url) || 'assets/images/placeholder_avatar.png';
     avatarEl.src = avatarSrc;
     avatarEl.alt = username ? `@${username}` : (firstName || 'avatar');
+
+    if (locationEl) {
+      const cityLabel = user && (user.city_label || buildCityLabel(user.city, user.region, user.country));
+      const utc = user && user.utc_offset;
+      if (cityLabel || utc) {
+        locationEl.textContent = utc ? `${cityLabel || '—'} · ${utc}` : cityLabel;
+      } else if (currentCitySelection) {
+        locationEl.textContent = `${currentCitySelection.label} · ${currentCitySelection.utcOffset}`;
+      } else {
+        locationEl.textContent = '';
+      }
+    }
+
+    if (languageEl) {
+      const lang = (user && user.language) || currentLanguage || 'en';
+      languageEl.textContent = `Language: ${lang.toUpperCase()}`;
+    }
 
     const daily = user && typeof user.daily_points === 'number' ? user.daily_points : 0;
     const pointsTotal = user && typeof user.points_total === 'number'
@@ -977,6 +1335,14 @@
     const statusKey = 'status_' + ((user && user.reels_status) || 'pending');
     const statusText = translations[currentLanguage][statusKey] || ((user && user.reels_status) || 'pending');
     statusEl.textContent = `${statusLabel}: ${statusText}`;
+
+    const isPremium = !!(user && (user.is_premium || user.telegram_meta?.is_premium));
+    if (premiumReel2) {
+      premiumReel2.classList.toggle('hidden', !isPremium);
+    }
+    if (premiumReel3) {
+      premiumReel3.classList.toggle('hidden', !isPremium);
+    }
   }
 
   function showReelEditPanel() {
@@ -1168,6 +1534,12 @@
       countEl.textContent = countLabel.replace('{0}', count);
     }
     showMenuView('referral');
+  }
+
+  function openFaqView() {
+    const menu = document.getElementById('bottom-menu');
+    if (menu && menu.classList.contains('locked')) return;
+    showMenuView('faq');
   }
 
   async function openLeaderboardView() {
@@ -1368,14 +1740,10 @@
    * Entry point on DOM ready.
    */
   document.addEventListener('DOMContentLoaded', async () => {
-    // Show introduction screen
     const introScreen = document.getElementById('intro-screen');
-    
-    // Hide introduction screen after 2.5 seconds with animation
     if (introScreen) {
       setTimeout(() => {
         introScreen.classList.add('hidden');
-        // Remove the intro screen from DOM after animation completes
         setTimeout(() => {
           if (introScreen.parentNode) {
             introScreen.parentNode.removeChild(introScreen);
@@ -1383,18 +1751,7 @@
         }, 2500);
       }, 2500);
     }
-    
-    // Add CSS for shake animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-        20%, 40%, 60%, 80% { transform: translateX(5px); }
-      }
-    `;
-    document.head.appendChild(style);
-    
+
     if (window.Telegram && Telegram.WebApp) {
       try {
         Telegram.WebApp.ready();
@@ -1409,16 +1766,48 @@
     getPendingReferrerCode();
     getTelegramInitContext(true);
 
+    let cityDebounceTimer = null;
+    const cityInput = document.getElementById('city-input');
+    if (cityInput) {
+      cityInput.addEventListener('input', () => {
+        const value = cityInput.value;
+        if (cityInput.getAttribute('data-selected')) {
+          cityInput.removeAttribute('data-selected');
+        }
+        if (cityDebounceTimer) clearTimeout(cityDebounceTimer);
+        cityDebounceTimer = setTimeout(() => fetchCitySuggestions(value), 350);
+      });
+    }
+
+    const changeCityBtn = document.getElementById('change-city');
+    if (changeCityBtn) {
+      changeCityBtn.addEventListener('click', () => {
+        clearCitySelection();
+      });
+    }
+
+    document.querySelectorAll('.language-option').forEach(option => {
+      option.addEventListener('click', () => {
+        document.querySelectorAll('.language-option').forEach(btn => btn.classList.remove('selected'));
+        option.classList.add('selected');
+        const lang = option.getAttribute('data-language') || 'en';
+        currentLanguage = lang;
+        safeSetItem('language', lang);
+        applyTranslations();
+        if (cachedProfile) {
+          cachedProfile.language = lang;
+        }
+      });
+    });
+
+    setupThemeSwitch();
+
     await loadTranslations();
     captureTelegramUser();
     const existingProfile = await ensureProfileData();
     applyTranslations();
     applyProfileSelections(existingProfile || cachedProfile);
     setupKeyboardHandling();
-    setupCodeInputInteractions();
-
-    // Setup theme switch
-    setupThemeSwitch();
 
     const editButton = document.getElementById('edit-reel-link');
     if (editButton) {
@@ -1459,221 +1848,263 @@
       });
     }
 
-    // Добавляем обработчики для кнопок помощи
-    document.querySelectorAll('.help-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tooltipKey = btn.getAttribute('data-tooltip');
-        if (tooltipKey) {
-          showTooltip(tooltipKey);
-        }
-      });
-    });
-
-    // If onboarding completed previously show main menu immediately
-    if (hasCompletedOnboarding) {
-      document.querySelectorAll('.progress-container-ios26, .progress-container').forEach(el => {
-        el.classList.add('hidden');
-      });
-      document.getElementById('step1').classList.add('hidden');
-      document.getElementById('step2').classList.add('hidden');
-      document.getElementById('step3').classList.add('hidden');
-      document.getElementById('bottom-menu').classList.remove('hidden');
-      const profileBtn = document.querySelector('#bottom-menu .menu-btn[data-view="profile"]');
-      if (profileBtn) {
-        document.querySelectorAll('#bottom-menu .menu-btn').forEach(b => b.classList.remove('active'));
-        profileBtn.classList.add('active');
-      }
-      await openProfileView();
+    if (currentCitySelection) {
+      applyCitySelection(currentCitySelection);
     } else {
-      console.log('Showing step 1 and updating progress to step 1');
-      showScreen('step1');
-      updateProgress(1);
-      // Удаляем автоматический показ подсказки
-      // showTooltip('tooltip_step1');
+      const storedCity = localStorage.getItem('city_label');
+      if (storedCity) {
+        applyCitySelection({
+          label: storedCity,
+          city: '',
+          region: '',
+          country: '',
+          utcOffset: localStorage.getItem('utc_offset') || 'UTC+00:00',
+          timezoneId: null
+        });
+      }
     }
 
-    // Step 1 next
-    document.getElementById('step1-next').addEventListener('click', () => {
-      console.log('Step 1 next button clicked');
-      if (!validateStep1()) return;
-      // Persist selected values in localStorage
-      const region = document.getElementById('region-select').value;
-      const language = document.getElementById('language-select').value;
-      const timezone = document.getElementById('timezone-select').value;
-      localStorage.setItem('region', region);
-      localStorage.setItem('language', language);
-      localStorage.setItem('utc_offset', timezone);
-      currentLanguage = language;
-      localStorage.setItem('language', language);
-      applyTranslations();
-      showScreen('step2');
-      console.log('Updating progress to step 2');
-      updateProgress(2);
-      // Удаляем автоматический показ подсказки
-      // showTooltip('tooltip_step2');
-    });
+    const bottomMenu = document.getElementById('bottom-menu');
+    const step1Btn = document.getElementById('step1-next');
+    const openStoriesBtn = document.getElementById('open-stories-trigger');
+    const modal = document.getElementById('stories-modal');
+    const modalClose = document.getElementById('stories-modal-close');
+    const modalOpen = document.getElementById('stories-modal-open');
+    const modalHide = document.getElementById('stories-modal-hide');
+    const missionSubmitBtn = document.getElementById('launch-reel-btn');
+    const reopenStoriesBtn = document.getElementById('reopen-stories');
+    const goToMenuBtn = document.getElementById('go-to-menu-btn');
+    const adviceCard = document.getElementById('advice-card');
 
-    // Step 2 next
-    document.getElementById('step2-next').addEventListener('click', () => {
-      console.log('Step 2 next button clicked');
-      showScreen('step3');
-      console.log('Updating progress to step 3');
-      updateProgress(3);
-      // Удаляем автоматический показ подсказки
-      // showTooltip('tooltip_step3');
-    });
+    if (modalHide) {
+      modalHide.checked = storiesModalDismissed;
+      modalHide.addEventListener('change', (event) => {
+        persistStoriesModalPreference(event.target.checked);
+      });
+    }
 
-    // Step 3 submit
-    document.getElementById('step3-submit').addEventListener('click', async () => {
-      if (!validateStep3()) return;
-
-      const telegramUser = captureTelegramUser();
-      let telegramId = telegramUser && telegramUser.id != null ? telegramUser.id : null;
-      if (telegramId == null) {
-        const fallback = getTelegramIdForRequest();
-        if (fallback != null && fallback !== '') telegramId = fallback;
-      }
-
-      const storedProfile = cachedProfile || existingProfile || null;
-      const username = (telegramUser && telegramUser.username) || (storedProfile && storedProfile.username) || '';
-      const firstName = (telegramUser && telegramUser.first_name) || (storedProfile && storedProfile.first_name) || '';
-      const lastName = (telegramUser && telegramUser.last_name) || (storedProfile && storedProfile.last_name) || '';
-      const photoUrl = (telegramUser && telegramUser.photo_url) || (storedProfile && storedProfile.photo_url) || '';
-
-      const reelLink = document.getElementById('reel-link').value.trim();
-      const code = Array.from(document.querySelectorAll('.code-digit')).map(i => i.value.trim()).join('');
-      const adminBypass = code === '123456789';
-      const finalReelLink = adminBypass ? 'https://www.instagram.com/reel/C123456789/' : reelLink;
-      const hasNineDigitCode = adminBypass || /^\d{9}$/.test(code);
-
-      if (telegramId == null) {
-        const errorEl = document.getElementById('step3-error');
-        errorEl.textContent = 'Telegram ID is required to save your profile.';
-        errorEl.classList.remove('hidden');
-        return;
-      }
-
-      const userData = {
-        telegram_id: telegramId,
-        username,
-        first_name: firstName,
-        last_name: lastName,
-        photo_url: photoUrl,
-        region: localStorage.getItem('region'),
-        language: localStorage.getItem('language'),
-        utc_offset: localStorage.getItem('utc_offset'),
-        reels_link: finalReelLink || null,
-        reels_status: 'pending',
-        nine_digit_code: hasNineDigitCode
-      };
-
-      if (currentReferralId) {
-        userData.user_id = currentReferralId;
-      }
-      if (!cachedProfile) {
-        userData.points_total = 0;
-        userData.points_current = 0;
-        userData.daily_points = 0;
-        userData.referrals = [];
-      } else if (Array.isArray(cachedProfile.referrals)) {
-        userData.referrals = cachedProfile.referrals;
-      }
-      const pendingReferrer = (cachedProfile && cachedProfile.referrer_id) || getPendingReferrerCode();
-      if (pendingReferrer) {
-        userData.referrer_id = pendingReferrer;
-        persistPendingReferrer(pendingReferrer);
-      }
-
-      if (!userData.language && telegramUser && telegramUser.language_code) {
-        userData.language = telegramUser.language_code;
-      }
-
-      const telegramMeta = buildTelegramMeta(telegramUser);
-      if (telegramMeta) {
-        userData.telegram_meta = telegramMeta;
-      }
-
-      const launchMeta = buildTelegramLaunchMeta();
-      if (launchMeta) {
-        userData.telegram_launch = launchMeta;
-      }
-
-      console.log('User data to be saved:', userData);
-
-      // Save via API and check if successful
-      const saveResult = await saveUserData(userData);
-      if (!saveResult.ok) {
-        console.error('Failed to save user data to server:', saveResult.error);
-        // Показываем сообщение об ошибке
-        const errorEl = document.getElementById('step3-error');
-        errorEl.textContent = 'Failed to save data. Please try again.';
-        errorEl.classList.remove('hidden');
-        errorEl.style.animation = 'shake 0.5s';
-        setTimeout(() => {
-          errorEl.style.animation = '';
-        }, 500);
-        return;
-      }
-      
-      console.log('User data saved successfully', saveResult.data || {});
-      const savedProfile = (saveResult.data && typeof saveResult.data === 'object') ? saveResult.data : null;
-      const completionCandidate = savedProfile || { ...(cachedProfile || {}), ...userData };
-      completionCandidate.nine_digit_code = coerceBoolean(completionCandidate.nine_digit_code) || hasNineDigitCode;
-      persistOnboardingCompletion(isProfileComplete(completionCandidate));
-      if (saveResult.data && typeof saveResult.data === 'object') {
-        cachedProfile = saveResult.data;
-        if (saveResult.data.user_id) {
-          currentReferralId = saveResult.data.user_id;
-          try {
-            localStorage.setItem('referral_id', saveResult.data.user_id);
-          } catch (e) {
-            console.warn('Unable to persist referral_id after save', e);
-          }
+    function setMenuActive(view) {
+      document.querySelectorAll('#bottom-menu .menu-btn').forEach(btn => {
+        const btnView = btn.getAttribute('data-view');
+        if (btnView === view) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
         }
-        populateProfile(saveResult.data);
-      } else {
-        await ensureProfileData(true);
-        populateProfile(cachedProfile);
+      });
+    }
+
+    async function handleStep1Next() {
+      const errorEl = document.getElementById('step1-error');
+      if (errorEl) {
+        errorEl.classList.add('hidden');
+        errorEl.textContent = '';
+      }
+      if (!currentCitySelection) {
+        if (errorEl) {
+          errorEl.textContent = 'Please choose your city from the list.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+      const languageOption = document.querySelector('.language-option.selected');
+      const language = languageOption ? languageOption.getAttribute('data-language') : currentLanguage;
+      if (!language) {
+        if (errorEl) {
+          errorEl.textContent = 'Please choose a language.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
       }
 
-      // Show success overlay instead of a separate screen.  The overlay
-      // appears on top of the current view and hides itself when the
-      // user presses OK.  After closing the overlay we reveal the
-      // bottom menu and navigate to the profile view.
-      const overlay = document.getElementById('success-overlay');
-      overlay.classList.remove('hidden');
-      overlay.style.opacity = '0';
-      setTimeout(() => {
-        overlay.style.transition = 'opacity 0.3s ease';
-        overlay.style.opacity = '1';
-      }, 10);
-      const okBtn = document.getElementById('success-ok');
-      okBtn.onclick = async () => {
-        overlay.style.opacity = '0';
-        setTimeout(async () => {
-          overlay.classList.add('hidden');
-          // Hide onboarding and progress completely
-          // Hide all progress bars
-          document.querySelectorAll('.progress-container-ios26, .progress-container').forEach(el => {
-            el.classList.add('hidden');
-          });
-          document.getElementById('step1').classList.add('hidden');
-          document.getElementById('step2').classList.add('hidden');
-          document.getElementById('step3').classList.add('hidden');
-          document.getElementById('bottom-menu').classList.remove('hidden');
-          document.querySelectorAll('#bottom-menu .menu-btn').forEach(b => b.classList.remove('active'));
-          const profileBtn = document.querySelector('#bottom-menu .menu-btn[data-view="profile"]');
-          if (profileBtn) profileBtn.classList.add('active');
-          await openProfileView(true);
-        }, 300);
+      currentLanguage = language;
+      safeSetItem('language', language);
+      safeSetItem('utc_offset', currentCitySelection.utcOffset);
+      try {
+        localStorage.setItem('city_label', currentCitySelection.label);
+      } catch (e) {
+        console.warn('Unable to persist city label', e);
+      }
+
+      const payload = {
+        language,
+        city: currentCitySelection.city || currentCitySelection.label,
+        region: currentCitySelection.region || '',
+        country: currentCitySelection.country || '',
+        city_label: currentCitySelection.label,
+        utc_offset: currentCitySelection.utcOffset,
+        timezone: currentCitySelection.timezoneId || null,
+        mission_progress: 0
       };
-    });
 
-    // Add event listener for the "Back to Stories" button
+      const result = await saveUserData(payload);
+      if (!result.ok) {
+        if (errorEl) {
+          errorEl.textContent = result.error || 'Failed to save data. Please try again.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
 
-    // Bottom menu navigation
+      if (result.data) {
+        cachedProfile = result.data;
+        updateStatsBoard(result.data);
+        updateAdvice(result.data);
+      }
+      applyProfileSelections(cachedProfile);
+      showMissionScreen('mission-step2');
+      updateMissionDots(1);
+      enableMenuAccess(false);
+    }
+
+    async function proceedToStories() {
+      await persistMissionState({ mission_progress: 1, stories_modal_hidden: storiesModalDismissed });
+      showMissionScreen('mission-step4');
+      updateMissionDots(2);
+      enableMenuAccess(false);
+      openStoriesLink();
+    }
+
+    if (step1Btn) {
+      step1Btn.addEventListener('click', handleStep1Next);
+    }
+
+    if (openStoriesBtn) {
+      openStoriesBtn.addEventListener('click', async () => {
+        if (!storiesModalDismissed && modal) {
+          modal.classList.remove('hidden');
+        } else {
+          await proceedToStories();
+        }
+      });
+    }
+
+    if (modalClose) {
+      modalClose.addEventListener('click', () => {
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
+    if (modalOpen) {
+      modalOpen.addEventListener('click', async () => {
+        if (modalHide) {
+          persistStoriesModalPreference(modalHide.checked);
+        }
+        if (modal) modal.classList.add('hidden');
+        await proceedToStories();
+      });
+    }
+
+    if (reopenStoriesBtn) {
+      reopenStoriesBtn.addEventListener('click', () => {
+        openStoriesLink();
+      });
+    }
+
+    async function handleMissionSubmit() {
+      const linkInput = document.getElementById('mission-reel-link');
+      const codeInput = document.getElementById('mission-code');
+      const errorEl = document.getElementById('mission-step4-error');
+      if (errorEl) {
+        errorEl.classList.add('hidden');
+        errorEl.textContent = '';
+      }
+      const link = linkInput ? linkInput.value.trim() : '';
+      const code = codeInput ? codeInput.value.trim() : '';
+      const adminBypass = code === '123456789';
+      const linkValid = /^https:\/\/www\.instagram\.com\/reel\//i.test(link);
+      const codeValid = adminBypass || /^\d{9}$/.test(code);
+
+      if (!linkValid) {
+        if (errorEl) {
+          errorEl.textContent = 'Please paste a valid Instagram Reel link.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+      if (!codeValid) {
+        if (errorEl) {
+          errorEl.textContent = 'Enter the nine digit code from the stories.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const profile = cachedProfile || await ensureProfileData();
+      const currentCount = Number(profile?.reels_launched_total || 0);
+      const payload = {
+        reels_link: link,
+        reels_status: 'pending',
+        nine_digit_code: true,
+        mission_progress: 2,
+        reels_launched_total: currentCount + 1,
+        stories_modal_hidden: storiesModalDismissed
+      };
+
+      const result = await persistMissionState(payload);
+      if (!result.ok) {
+        if (errorEl) {
+          errorEl.textContent = result.error || 'Failed to save data. Try again.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const saved = result.data || cachedProfile;
+      cachedProfile = saved;
+      persistOnboardingCompletion(true);
+      updateMissionDots(3);
+      updateAdvice(saved);
+      showMissionScreen('mission-step5');
+      enableMenuAccess(true);
+      await persistMissionState({ mission_progress: 3, stories_modal_hidden: storiesModalDismissed });
+    }
+
+    if (missionSubmitBtn) {
+      missionSubmitBtn.addEventListener('click', handleMissionSubmit);
+    }
+
+    if (goToMenuBtn) {
+      goToMenuBtn.addEventListener('click', async () => {
+        enableMenuAccess(true);
+        setMenuActive('profile');
+        await openProfileView(true);
+      });
+    }
+
+    if (adviceCard) {
+      const openFaq = async () => {
+        enableMenuAccess(true);
+        setMenuActive('faq');
+        openFaqView();
+      };
+      adviceCard.addEventListener('click', openFaq);
+      adviceCard.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openFaq();
+        }
+      });
+    }
+
+    if (hasCompletedOnboarding) {
+      enableMenuAccess(true);
+      updateMissionDots(3);
+      document.querySelectorAll('.mission-screen').forEach(section => section.classList.add('hidden'));
+      setMenuActive('profile');
+      await openProfileView(true);
+    } else {
+      showMissionScreen('onboarding-step1');
+      updateMissionDots(0);
+      if (bottomMenu) {
+        bottomMenu.classList.add('hidden');
+        bottomMenu.classList.add('locked');
+      }
+    }
+
     document.querySelectorAll('#bottom-menu .menu-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
+        if (bottomMenu && bottomMenu.classList.contains('locked')) return;
         const view = btn.getAttribute('data-view');
         document.querySelectorAll('#bottom-menu .menu-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
@@ -1681,76 +2112,86 @@
           await openReferralView();
         } else if (view === 'profile') {
           await openProfileView();
-        } else if (view === 'leaderboard') {
-          await openLeaderboardView();
+        } else if (view === 'faq') {
+          openFaqView();
         }
       });
     });
 
-    // Copy referral link
-    document.getElementById('copy-referral').addEventListener('click', copyReferral);
-    // Send referral (placeholder – opens Telegram Web share if available)
-    document.getElementById('send-referral').addEventListener('click', () => {
-      const link = document.getElementById('referral-link').value;
-      if (window.Telegram && Telegram.WebApp) {
-        Telegram.WebApp.openTelegramLink(link);
-      } else {
-        alert('Telegram WebApp not available. Please copy the link manually.');
-      }
-    });
-    
-    // Logout functionality - привязана к кнопке в профиле
-    document.getElementById('logout-btn').addEventListener('click', () => {
-      // Show confirmation dialog
-      if (confirm('Are you sure you want to logout?')) {
-        // Clear all user data from localStorage
+    const copyBtn = document.getElementById('copy-referral');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', copyReferral);
+    }
+
+    const sendBtn = document.getElementById('send-referral');
+    if (sendBtn) {
+      sendBtn.addEventListener('click', () => {
+        const link = document.getElementById('referral-link')?.value || '';
+        if (window.Telegram && Telegram.WebApp) {
+          Telegram.WebApp.openTelegramLink(link);
+        } else {
+          window.open(link, '_blank', 'noopener');
+        }
+      });
+    }
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        if (!confirm('Are you sure you want to logout?')) return;
         localStorage.removeItem('region');
         localStorage.removeItem('language');
         localStorage.removeItem('utc_offset');
         localStorage.removeItem('referral_id');
         localStorage.removeItem('telegram_id');
         localStorage.removeItem('onboarding_complete');
+        localStorage.removeItem('city_label');
+        localStorage.removeItem('stories_modal_hidden');
 
-        // Reset user variables
         currentReferralId = null;
         cachedProfile = null;
         cachedTelegramUser = null;
         currentTelegramId = null;
         hasCompletedOnboarding = false;
-        
-        // Hide menu and show onboarding screens
-        document.getElementById('bottom-menu').classList.add('hidden');
-        document.getElementById('referral-view').classList.add('hidden');
-        document.getElementById('profile-view').classList.add('hidden');
-        document.getElementById('leaderboard-view').classList.add('hidden');
-        document.querySelectorAll('#bottom-menu .menu-btn').forEach(b => b.classList.remove('active'));
-        
-        // Show onboarding screens
-        document.getElementById('step1').classList.remove('hidden');
-        // Show all progress bars
-        document.querySelectorAll('.progress-container-ios26, .progress-container').forEach(el => {
-          el.classList.remove('hidden');
+        missionProgress = 0;
+        storiesModalDismissed = false;
+
+        if (bottomMenu) {
+          bottomMenu.classList.add('hidden');
+          bottomMenu.classList.add('locked');
+        }
+        showMissionScreen('onboarding-step1');
+        updateMissionDots(0);
+        clearCitySelection();
+        document.querySelectorAll('.language-option').forEach(btn => btn.classList.remove('selected'));
+        const linkInput = document.getElementById('mission-reel-link');
+        if (linkInput) linkInput.value = '';
+        const codeInput = document.getElementById('mission-code');
+        if (codeInput) codeInput.value = '';
+      });
+    }
+
+    const accordion = document.getElementById('faq-accordion');
+    if (accordion) {
+      accordion.querySelectorAll('.faq-item').forEach(item => {
+        const question = item.querySelector('.faq-question');
+        if (!question) return;
+        question.addEventListener('click', () => {
+          item.classList.toggle('active');
         });
-        
-        // Reset form fields
-        document.getElementById('region-select').selectedIndex = 0;
-        document.getElementById('language-select').selectedIndex = 0;
-        document.getElementById('reel-link').value = '';
-        document.querySelectorAll('.code-digit').forEach(input => {
-          input.value = '';
-          input.classList.remove('valid', 'invalid', 'filled');
-        });
-        
-        // Reset error messages
-        document.getElementById('step1-error').classList.add('hidden');
-        document.getElementById('step2-error').classList.add('hidden');
-        document.getElementById('step3-error').classList.add('hidden');
-        
-        // Show first step
-        showScreen('step1');
-        updateProgress(1);
-        showTooltip('tooltip_step1');
-      }
-    });
+      });
+    }
+
+    const contactSupport = document.getElementById('contact-support');
+    if (contactSupport) {
+      contactSupport.addEventListener('click', () => {
+        const supportUrl = 'https://t.me/testofcodebot';
+        if (window.Telegram && Telegram.WebApp) {
+          Telegram.WebApp.openTelegramLink(supportUrl);
+        } else {
+          window.open(supportUrl, '_blank', 'noopener');
+        }
+      });
+    }
   });
 })();
