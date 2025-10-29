@@ -10,9 +10,11 @@
   const translations = {};
   let currentLanguage = localStorage.getItem('language') || 'en';
   let currentTheme = 'light';
-  let hasCompletedOnboarding = localStorage.getItem('onboarding_complete') === 'true';
+  let onboardingLastCompletedKey = null;
+  let hasCompletedOnboarding = false;
   const GEOAPIFY_KEY = '470ed5f201444d7ab192a18d51438995';
   const DEFAULT_STORIES_URL = 'https://www.instagram.com/';
+  const DEFAULT_GLOBAL_REELS_LIMIT = 500;
   let currentTelegramId = localStorage.getItem('telegram_id') || null;
   let currentReferralId = localStorage.getItem('referral_id') || null;
   let cachedProfile = null;
@@ -24,6 +26,12 @@
   let currentCitySelection = null;
   let missionProgress = 0;
   let storiesModalDismissed = localStorage.getItem('stories_modal_hidden') === 'true';
+  let onboardingResetTimer = null;
+  let globalReelsCount = 0;
+  let reelsLimit = DEFAULT_GLOBAL_REELS_LIMIT;
+  let editingRegionLanguage = false;
+  let cachedDailyCode = null;
+  let cachedDailyCodeDate = null;
 
   function getStoredTheme() {
     try {
@@ -178,6 +186,44 @@
     return null;
   }
 
+  function getUtcDateKey(date = new Date()) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  function computeGeoapifyUtcOffset(timezone = {}) {
+    if (!timezone || typeof timezone !== 'object') return null;
+    const { offset_STD_seconds, offset_DST_seconds, offset_STD, offset_DST, abbreviation_DST, abbreviation_STD, is_dst } = timezone;
+    const offsetSeconds = Number.isFinite(offset_STD_seconds)
+      ? (is_dst && Number.isFinite(offset_DST_seconds) ? offset_DST_seconds : offset_STD_seconds)
+      : (is_dst && Number.isFinite(offset_DST_seconds) ? offset_DST_seconds : null);
+    const derived = formatUtcOffset(offsetSeconds);
+    const normalized = normalizeUtcOffset(derived || (is_dst ? offset_DST : offset_STD) || abbreviation_DST || abbreviation_STD);
+    return normalized || null;
+  }
+
+  function hydrateOnboardingState() {
+    const stored = safeGetItem('onboarding_last_completed');
+    if (isValidString(stored)) {
+      onboardingLastCompletedKey = stored;
+      hasCompletedOnboarding = stored === getUtcDateKey();
+    } else {
+      onboardingLastCompletedKey = null;
+      hasCompletedOnboarding = false;
+    }
+    const legacy = safeGetItem('onboarding_complete');
+    if (legacy === 'true' && !onboardingLastCompletedKey) {
+      onboardingLastCompletedKey = getUtcDateKey();
+      hasCompletedOnboarding = true;
+      safeSetItem('onboarding_last_completed', onboardingLastCompletedKey);
+    }
+    if (legacy != null) {
+      safeSetItem('onboarding_complete', null);
+    }
+    if (onboardingLastCompletedKey && onboardingLastCompletedKey !== getUtcDateKey()) {
+      hasCompletedOnboarding = false;
+    }
+  }
+
   function isValidReelLink(link) {
     return typeof link === 'string' && /^https:\/\/www\.instagram\.com\/reel\//i.test(link.trim());
   }
@@ -197,11 +243,46 @@
     return regionOk && languageOk && utcOk && reelsOk && codeOk;
   }
 
-  function persistOnboardingCompletion(completed) {
-    hasCompletedOnboarding = !!completed;
-    safeSetItem('onboarding_complete', completed ? 'true' : null);
+  function persistOnboardingCompletion(completed, dateKey = null) {
+    if (completed) {
+      const key = isValidString(dateKey) ? dateKey : getUtcDateKey();
+      onboardingLastCompletedKey = key;
+      hasCompletedOnboarding = key === getUtcDateKey();
+      safeSetItem('onboarding_last_completed', key);
+    } else {
+      hasCompletedOnboarding = false;
+      onboardingLastCompletedKey = null;
+      safeSetItem('onboarding_last_completed', null);
+    }
+    safeSetItem('onboarding_complete', null);
+    scheduleOnboardingResetTimer();
     return hasCompletedOnboarding;
   }
+
+  function scheduleOnboardingResetTimer() {
+    if (onboardingResetTimer) {
+      clearTimeout(onboardingResetTimer);
+      onboardingResetTimer = null;
+    }
+    if (!hasCompletedOnboarding) return;
+    const now = new Date();
+    const nextMidnightUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+    const delay = Math.max(1, nextMidnightUtc - now.getTime());
+    onboardingResetTimer = setTimeout(() => {
+      onboardingResetTimer = null;
+      onboardingLastCompletedKey = null;
+      hasCompletedOnboarding = false;
+      safeSetItem('onboarding_last_completed', null);
+      missionProgress = 0;
+      if (!editingRegionLanguage) {
+        startMissionFlow(true);
+      }
+    }, delay);
+  }
+
+  hydrateOnboardingState();
+  scheduleOnboardingResetTimer();
+  updateStatsBoard(globalReelsCount);
 
   function parseTelegramInitDataFromUrl() {
     const sources = [];
@@ -650,17 +731,25 @@
       if (profile.referrer_id) {
         persistPendingReferrer(profile.referrer_id);
       }
-      persistOnboardingCompletion(isProfileComplete(profile));
+      const lastMissionDate = isValidString(profile.last_mission_completed_at)
+        ? profile.last_mission_completed_at
+        : null;
+      const missionCompleted = Number(profile.mission_progress || 0) >= 3;
+      if (lastMissionDate) {
+        persistOnboardingCompletion(lastMissionDate === getUtcDateKey(), lastMissionDate);
+      } else if (!missionCompleted) {
+        persistOnboardingCompletion(false);
+      }
       missionProgress = Number(profile.mission_progress || 0);
       storiesModalDismissed = profile.stories_modal_hidden != null
         ? coerceBoolean(profile.stories_modal_hidden)
         : storiesModalDismissed;
-      updateStatsBoard(profile);
       updateAdvice(profile);
     }
     if (!profile) {
       persistOnboardingCompletion(false);
     }
+    updateStatsBoard(globalReelsCount);
     return profile;
   }
 
@@ -798,6 +887,59 @@
     }
   }
 
+  function hideMissionScreens() {
+    document.querySelectorAll('.mission-screen').forEach(section => {
+      section.classList.add('hidden');
+    });
+    const progress = document.getElementById('mission-progress');
+    if (progress) {
+      progress.classList.add('hidden');
+    }
+  }
+
+  async function enterMainApp(initialView = 'profile', options = {}) {
+    hideMissionScreens();
+    enableMenuAccess(true);
+    const bottomMenu = document.getElementById('bottom-menu');
+    if (bottomMenu) {
+      bottomMenu.classList.remove('hidden');
+    }
+    const view = initialView || 'profile';
+    setMenuActive(view);
+    if (view === 'faq') {
+      openFaqView();
+    } else if (view === 'referral') {
+      await openReferralView();
+    } else {
+      await openProfileView(options.refreshProfile || false);
+    }
+  }
+
+  function startMissionFlow(force = false) {
+    if (editingRegionLanguage) return;
+    if (!force && hasCompletedOnboarding) return;
+    const bottomMenu = document.getElementById('bottom-menu');
+    if (bottomMenu) {
+      bottomMenu.classList.add('hidden');
+      bottomMenu.classList.add('locked');
+    }
+    const progress = document.getElementById('mission-progress');
+    const needsCity = !currentCitySelection || !isValidString(currentCitySelection.label);
+    const needsLanguage = !isValidString(currentLanguage);
+    missionProgress = needsCity || needsLanguage ? 0 : 1;
+    if (needsCity || needsLanguage) {
+      if (progress) progress.classList.add('hidden');
+      showMissionScreen('onboarding-step1');
+      updateMissionDots(0);
+    } else {
+      if (progress) progress.classList.remove('hidden');
+      showMissionScreen('mission-step2');
+      updateMissionDots(1);
+      refreshGlobalStats();
+    }
+    enableMenuAccess(false);
+  }
+
   function buildCityLabel(city, region, country) {
     const parts = [];
     if (isValidString(city)) parts.push(city);
@@ -899,15 +1041,14 @@
             const region = props.state || props.county || props.region || '';
             const country = props.country || props.country_code || '';
             const timezone = props.timezone || {};
-            const utcFromSeconds = formatUtcOffset(Number(timezone.offset_STD_seconds));
-            const utc = normalizeUtcOffset(timezone.offset_STD || utcFromSeconds || timezone.name);
+            const utc = computeGeoapifyUtcOffset(timezone);
             return {
               city: city || '',
               region: region || '',
               country: country || '',
               label: buildCityLabel(city, region, country),
               utcOffset: utc || 'UTC+00:00',
-              timezoneId: timezone.name || null
+              timezoneId: timezone.name || timezone.timezone || null
             };
           })
         .filter(item => isValidString(item.label));
@@ -974,15 +1115,68 @@
     }
   }
 
-  function updateStatsBoard(user) {
-    const reels = Number(user?.reels_launched_total || 0);
-    const premium = user?.telegram_meta?.is_premium ? 1 : 0;
-    const boardReels = document.getElementById('board-reels-count');
-    const boardSpots = document.getElementById('board-spots-count');
-    const boardPremium = document.getElementById('board-premium-count');
-    if (boardReels) boardReels.textContent = `${Math.min(1500, reels)} / 1500`;
-    if (boardSpots) boardSpots.textContent = `${Math.min(500, 50 + reels * 5)} / 500`;
-    if (boardPremium) boardPremium.textContent = `${premium ? 12 + reels : 6 + reels}`;
+  function renderFlapCounter(text) {
+    const container = document.getElementById('board-reels-count');
+    if (!container) return;
+    container.innerHTML = '';
+    const chars = (text || '').split('');
+    chars.forEach(char => {
+      const cell = document.createElement('span');
+      const isSeparator = char === '/' || char === ' ';
+      cell.className = 'flap-cell' + (isSeparator ? ' separator' : '');
+      cell.textContent = char === ' ' ? '\u00A0' : char;
+      container.appendChild(cell);
+    });
+  }
+
+  function updateStatsBoard(count = globalReelsCount) {
+    const numeric = Number(count);
+    if (Number.isFinite(numeric)) {
+      globalReelsCount = numeric;
+    }
+    const limit = Number.isFinite(reelsLimit) && reelsLimit > 0 ? reelsLimit : DEFAULT_GLOBAL_REELS_LIMIT;
+    const limited = Math.min(limit, Math.max(0, Math.floor(globalReelsCount)));
+    const padded = limited.toString().padStart(3, '0');
+    renderFlapCounter(`${padded} / ${limit}`);
+  }
+
+  async function refreshGlobalStats() {
+    try {
+      const res = await fetch(`${API_BASE}/api/stats`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const total = Number(data?.total_valid_reels);
+      if (Number.isFinite(total)) {
+        globalReelsCount = total;
+      }
+      const limitFromServer = Number(data?.reels_limit);
+      if (Number.isFinite(limitFromServer) && limitFromServer > 0) {
+        reelsLimit = limitFromServer;
+      }
+      updateStatsBoard(globalReelsCount);
+    } catch (e) {
+      console.warn('Unable to refresh global stats', e);
+      updateStatsBoard(globalReelsCount);
+    }
+  }
+
+  async function getDailyMissionCode(forceRefresh = false) {
+    const todayKey = getUtcDateKey();
+    if (!forceRefresh && cachedDailyCode && cachedDailyCodeDate === todayKey) {
+      return cachedDailyCode;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/daily-code`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const code = String(data?.code || '').padStart(9, '0');
+      cachedDailyCode = code;
+      cachedDailyCodeDate = data?.date || todayKey;
+      return cachedDailyCode;
+    } catch (e) {
+      console.warn('Unable to fetch daily code', e);
+      return null;
+    }
   }
 
   const adviceTips = [
@@ -1249,8 +1443,8 @@
     if (result.ok && result.data) {
       cachedProfile = result.data;
       missionProgress = Number(result.data.mission_progress || missionProgress || 0);
-      updateStatsBoard(result.data);
       updateAdvice(result.data);
+      await refreshGlobalStats();
     }
     return result;
   }
@@ -1811,6 +2005,25 @@
       });
     }
 
+    const profileChangeRegionBtn = document.getElementById('profile-change-region');
+    if (profileChangeRegionBtn) {
+      profileChangeRegionBtn.addEventListener('click', () => {
+        editingRegionLanguage = true;
+        const bottomMenuEl = document.getElementById('bottom-menu');
+        if (bottomMenuEl) {
+          bottomMenuEl.classList.add('hidden');
+          bottomMenuEl.classList.add('locked');
+        }
+        const progressEl = document.getElementById('mission-progress');
+        if (progressEl) {
+          progressEl.classList.add('hidden');
+        }
+        showMissionScreen('onboarding-step1');
+        updateMissionDots(0);
+        enableMenuAccess(false);
+      });
+    }
+
     document.querySelectorAll('.language-option').forEach(option => {
       option.addEventListener('click', () => {
         document.querySelectorAll('.language-option').forEach(btn => btn.classList.remove('selected'));
@@ -1830,6 +2043,7 @@
     await loadTranslations();
     captureTelegramUser();
     const existingProfile = await ensureProfileData();
+    await refreshGlobalStats();
     applyTranslations();
     applyProfileSelections(existingProfile || cachedProfile);
     setupKeyboardHandling();
@@ -1898,7 +2112,7 @@
     const modalHide = document.getElementById('stories-modal-hide');
     const missionSubmitBtn = document.getElementById('launch-reel-btn');
     const reopenStoriesBtn = document.getElementById('reopen-stories');
-    const goToMenuBtn = document.getElementById('go-to-menu-btn');
+    const successFaqBtn = document.getElementById('success-faq-btn');
     const adviceCard = document.getElementById('advice-card');
 
     if (modalHide) {
@@ -1958,9 +2172,11 @@
         country: currentCitySelection.country || '',
         city_label: currentCitySelection.label,
         utc_offset: currentCitySelection.utcOffset,
-        timezone: currentCitySelection.timezoneId || null,
-        mission_progress: 0
+        timezone: currentCitySelection.timezoneId || null
       };
+      if (!editingRegionLanguage) {
+        payload.mission_progress = 0;
+      }
 
       const result = await saveUserData(payload);
       if (!result.ok) {
@@ -1973,10 +2189,17 @@
 
       if (result.data) {
         cachedProfile = result.data;
-        updateStatsBoard(result.data);
         updateAdvice(result.data);
       }
       applyProfileSelections(cachedProfile);
+      await refreshGlobalStats();
+
+      if (editingRegionLanguage) {
+        editingRegionLanguage = false;
+        await enterMainApp('profile', { refreshProfile: true });
+        return;
+      }
+
       showMissionScreen('mission-step2');
       updateMissionDots(1);
       enableMenuAccess(false);
@@ -2055,6 +2278,24 @@
         return;
       }
 
+      if (!adminBypass) {
+        const todaysCode = await getDailyMissionCode();
+        if (!todaysCode) {
+          if (errorEl) {
+            errorEl.textContent = 'Unable to verify the code right now. Please try again in a minute.';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+        if (code !== todaysCode) {
+          if (errorEl) {
+            errorEl.textContent = 'Incorrect code. Watch the stories again to get today\'s digits.';
+            errorEl.classList.remove('hidden');
+          }
+          return;
+        }
+      }
+
       const profile = cachedProfile || await ensureProfileData();
       const currentCount = Number(profile?.reels_launched_total || 0);
       const payload = {
@@ -2063,7 +2304,8 @@
         nine_digit_code: true,
         mission_progress: 2,
         reels_launched_total: currentCount + 1,
-        stories_modal_hidden: storiesModalDismissed
+        stories_modal_hidden: storiesModalDismissed,
+        last_mission_completed_at: getUtcDateKey()
       };
 
       const result = await persistMissionState(payload);
@@ -2081,27 +2323,28 @@
       updateMissionDots(3);
       updateAdvice(saved);
       showMissionScreen('mission-step5');
-      enableMenuAccess(true);
-      await persistMissionState({ mission_progress: 3, stories_modal_hidden: storiesModalDismissed });
+      await persistMissionState({
+        mission_progress: 3,
+        stories_modal_hidden: storiesModalDismissed,
+        last_mission_completed_at: getUtcDateKey()
+      });
     }
 
     if (missionSubmitBtn) {
       missionSubmitBtn.addEventListener('click', handleMissionSubmit);
     }
 
-    if (goToMenuBtn) {
-      goToMenuBtn.addEventListener('click', async () => {
-        enableMenuAccess(true);
-        setMenuActive('profile');
-        await openProfileView(true);
+    if (successFaqBtn) {
+      successFaqBtn.addEventListener('click', async () => {
+        persistOnboardingCompletion(true);
+        await enterMainApp('faq', { refreshProfile: true });
       });
     }
 
     if (adviceCard) {
       const openFaq = async () => {
-        enableMenuAccess(true);
-        setMenuActive('faq');
-        openFaqView();
+        persistOnboardingCompletion(true);
+        await enterMainApp('faq');
       };
       adviceCard.addEventListener('click', openFaq);
       adviceCard.addEventListener('keydown', (event) => {
@@ -2113,18 +2356,10 @@
     }
 
     if (hasCompletedOnboarding) {
-      enableMenuAccess(true);
       updateMissionDots(3);
-      document.querySelectorAll('.mission-screen').forEach(section => section.classList.add('hidden'));
-      setMenuActive('profile');
-      await openProfileView(true);
+      await enterMainApp('profile', { refreshProfile: true });
     } else {
-      showMissionScreen('onboarding-step1');
-      updateMissionDots(0);
-      if (bottomMenu) {
-        bottomMenu.classList.add('hidden');
-        bottomMenu.classList.add('locked');
-      }
+      startMissionFlow(true);
     }
 
     document.querySelectorAll('#bottom-menu .menu-btn').forEach(btn => {
@@ -2180,6 +2415,7 @@
         hasCompletedOnboarding = false;
         missionProgress = 0;
         storiesModalDismissed = false;
+        editingRegionLanguage = false;
 
         if (bottomMenu) {
           bottomMenu.classList.add('hidden');

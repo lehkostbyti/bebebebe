@@ -97,19 +97,12 @@
 
     <section id="mission-step2" class="mission-screen hidden">
       <h2>Mission launch</h2>
-      <div class="status-board glass card">
-        <div class="board-row">
-          <span class="label">Uploaded Reels</span>
-          <span id="board-reels-count" class="value">0 / 1500</span>
+      <div class="status-board glass card departure-board">
+        <div class="departure-title">
+          <span class="departure-indicator" aria-hidden="true"></span>
+          <span class="departure-label">Uploaded Reels</span>
         </div>
-        <div class="board-row">
-          <span class="label">Spots taken</span>
-          <span id="board-spots-count" class="value">0 / 500</span>
-        </div>
-        <div class="board-row">
-          <span class="label">Premium queue</span>
-          <span id="board-premium-count" class="value">0</span>
-        </div>
+        <div id="board-reels-count" class="departure-counter" aria-live="polite"></div>
       </div>
       <p class="mission-text">Your Reels will talk to the algorithm. Take the first action to join the queue.</p>
       <button id="open-stories-trigger" class="primary-btn wide">Find CODE in stories</button>
@@ -138,7 +131,10 @@
         <span class="advice-title">Useful advice</span>
         <span id="advice-text" class="advice-text">Tap to discover more tips.</span>
       </div>
-      <button id="go-to-menu-btn" class="primary-btn wide">Go to menu</button>
+      <button id="success-faq-btn" class="success-cta-btn wide">
+        <span class="cta-icon" aria-hidden="true">💡</span>
+        <span class="cta-text">How does the algorithm work?</span>
+      </button>
     </section>
 
     <nav id="bottom-menu" class="bottom-menu hidden glass card locked">
@@ -196,6 +192,7 @@
           <span id="profile-nickname" class="nickname">@user</span>
           <span id="profile-location" class="profile-location"></span>
           <span id="profile-language" class="profile-language"></span>
+          <button id="profile-change-region" class="profile-change-btn" type="button">Change Region / Language</button>
         </div>
       </div>
       <div class="profile-block balance-block glass">

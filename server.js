@@ -1,7 +1,7 @@
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
-const { randomUUID } = require('crypto');
+const { randomUUID, createHash } = require('crypto');
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -12,6 +12,8 @@ const PORT = process.env.PORT || 3000;
 // ================= Storage =================
 const DATA_DIR = path.join(__dirname, 'user_data');
 const DATA_FILE = path.join(DATA_DIR, 'user_data.json');
+const MAX_REELS_CAP = 500;
+const DAILY_CODE_SECRET = process.env.DAILY_CODE_SECRET || 'miniapp-secret';
 
 function ensureStorage() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -73,8 +75,29 @@ function isFiniteNumber(n) {
 function isValidUtcOffset(s) {
   return isNonEmptyString(s) && /^UTC[+-]\d{2}:\d{2}$/.test(s);
 }
+function isDateKey(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+function getUtcDateKey(date = new Date()) {
+  const iso = date.toISOString();
+  return iso.slice(0, 10);
+}
 function nowIso() { return new Date().toISOString(); }
 function lastOnlineStr() { return new Date().toDateString(); }
+
+function generateDailyNineDigitCode(date = new Date()) {
+  const key = `${getUtcDateKey(date)}:${DAILY_CODE_SECRET}`;
+  const hash = createHash('sha256').update(key).digest();
+  let digits = '';
+  for (let i = 0; i < hash.length && digits.length < 9; i += 1) {
+    const byte = hash[i];
+    digits += String(byte % 10);
+  }
+  while (digits.length < 9) {
+    digits += '0';
+  }
+  return digits.slice(0, 9);
+}
 
 function coerceBoolean(value, fallback = false) {
   if (value === true) return true;
@@ -147,6 +170,9 @@ function normalizeUserRecord(record) {
   base.timezone = isNonEmptyString(base.timezone) ? base.timezone : null;
   base.language = isNonEmptyString(base.language) ? base.language : null;
   base.utc_offset = isValidUtcOffset(base.utc_offset) ? base.utc_offset : null;
+  base.last_mission_completed_at = isDateKey(base.last_mission_completed_at)
+    ? base.last_mission_completed_at
+    : null;
 
   const referrals = normalizeReferrals(base.referrals);
   base.referrals = referrals !== undefined ? referrals : [];
@@ -201,6 +227,11 @@ function mergeUser(existing, incoming = {}) {
   if (isNonEmptyString(incoming.timezone)) out.timezone = incoming.timezone;
   if (isNonEmptyString(incoming.language)) out.language = incoming.language;
   if (isValidUtcOffset(incoming.utc_offset)) out.utc_offset = incoming.utc_offset;
+  if (isDateKey(incoming.last_mission_completed_at)) {
+    out.last_mission_completed_at = incoming.last_mission_completed_at;
+  } else if (incoming.last_mission_completed_at === null) {
+    out.last_mission_completed_at = null;
+  }
 
   // referrals
   const referrals = normalizeReferrals(incoming.referrals);
@@ -257,12 +288,101 @@ function mergeUser(existing, incoming = {}) {
   return out;
 }
 
+function countValidReels(users) {
+  if (!Array.isArray(users)) return 0;
+  return users.reduce((acc, user) => {
+    if (!user || typeof user !== 'object') return acc;
+    if (!validReelLink(user.reels_link || '')) return acc;
+    if (typeof user.reels_status === 'string' && user.reels_status.toLowerCase() === 'rejected') return acc;
+    return acc + 1;
+  }, 0);
+}
+
+function computeGlobalStats(users) {
+  const records = Array.isArray(users) ? users : readUsers();
+  const validReels = countValidReels(records);
+  return {
+    total_users: Array.isArray(records) ? records.length : 0,
+    total_valid_reels: validReels,
+    reels_limit: MAX_REELS_CAP,
+    updated_at: nowIso()
+  };
+}
+
 // ================= Routes =================
 app.get('/', (_req,res)=> res.json({
   status: 'ok',
   service: 'miniapp-api',
   file: DATA_FILE
 }));
+
+app.get('/api/stats', (_req, res) => {
+  const users = readUsers();
+  const stats = computeGlobalStats(users);
+  res.json(stats);
+});
+
+app.get('/api/daily-code', (_req, res) => {
+  const now = new Date();
+  const code = generateDailyNineDigitCode(now);
+  const todayKey = getUtcDateKey(now);
+  const nextMidnightUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  res.json({
+    date: todayKey,
+    code,
+    expires_at: nextMidnightUtc.toISOString()
+  });
+});
+
+app.get('/admin/daily-code', (_req, res) => {
+  const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Daily 9-digit code</title>
+    <style>
+      body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #0f172a; color: #f8fafc; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+      .panel { background:#1e293b; border-radius:16px; padding:32px; box-shadow:0 20px 40px rgba(15,23,42,0.35); text-align:center; width: min(360px, 90vw); }
+      button { background:#38bdf8; border:none; color:#0f172a; font-weight:600; font-size:1rem; padding:12px 24px; border-radius:999px; cursor:pointer; transition:transform 0.2s ease, box-shadow 0.2s ease; }
+      button:hover { transform: translateY(-1px); box-shadow:0 10px 24px rgba(56,189,248,0.35); }
+      .code { font-family: "JetBrains Mono", monospace; font-size:2rem; letter-spacing:0.35em; margin-top:20px; }
+      .meta { margin-top:12px; font-size:0.85rem; color:#cbd5f5; }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <h1>Today's mission code</h1>
+      <button id="code-btn" type="button">Get Today's 9-digit code</button>
+      <div id="code-output" class="code" aria-live="polite"></div>
+      <div id="code-meta" class="meta"></div>
+    </div>
+    <script>
+      const btn = document.getElementById('code-btn');
+      const out = document.getElementById('code-output');
+      const meta = document.getElementById('code-meta');
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Loading...';
+        try {
+          const res = await fetch('../api/daily-code');
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          out.textContent = data.code || '?????????';
+          meta.textContent = data.expires_at ? 'Valid until ' + new Date(data.expires_at).toUTCString() : '';
+        } catch (err) {
+          out.textContent = 'Error';
+          meta.textContent = err.message || 'Unable to fetch code';
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Get Today's 9-digit code";
+        }
+      });
+    </script>
+  </body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
 
 // GET /api/users?user_id=..&telegram_id=..
 app.get('/api/users', (req,res)=>{
