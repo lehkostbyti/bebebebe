@@ -1223,13 +1223,13 @@
         }
         return { ok: false, error: message };
       }
-      let payload = null;
+      let responsePayload = null;
       try {
-        payload = await res.json();
+        responsePayload = await res.json();
       } catch (e) {
         console.warn('Response did not contain JSON payload', e);
       }
-      return { ok: true, data: payload };
+      return { ok: true, data: responsePayload };
     } catch (e) {
       return { ok: false, error: e.message || 'Network error' };
     }
