@@ -1173,11 +1173,36 @@
    * Save user data to the backend via REST API.
    */
   async function saveUserData(data) {
+    const payload = { ...(data || {}) };
+
+    if (payload.telegram_id == null || payload.telegram_id === '') {
+      const telegramId = getTelegramIdForRequest();
+      if (telegramId != null && telegramId !== '') {
+        payload.telegram_id = telegramId;
+      } else {
+        delete payload.telegram_id;
+      }
+    }
+
+    if ((payload.user_id == null || payload.user_id === '') &&
+        (payload.telegram_id == null || payload.telegram_id === '')) {
+      if (cachedProfile && isValidString(cachedProfile.user_id)) {
+        payload.user_id = cachedProfile.user_id;
+      } else if (isValidString(currentReferralId)) {
+        payload.user_id = currentReferralId;
+      } else {
+        const storedReferral = safeGetItem('referral_id');
+        if (isValidString(storedReferral)) {
+          payload.user_id = storedReferral;
+        }
+      }
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(payload)
       });
       if (!res.ok) {
         let message = `HTTP ${res.status}`;
