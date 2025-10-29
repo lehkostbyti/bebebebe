@@ -52,42 +52,47 @@
       </div>
     </div>
 
-    <section id="onboarding-step1" class="mission-screen">
-      <h2>Welcome on board</h2>
-      <p class="mission-subtitle">Choose your city and language to personalise the mission briefing.</p>
-      <div class="city-picker glass card">
-        <label for="city-input">Your city</label>
-        <div class="city-input-wrapper">
-          <input id="city-input" type="text" autocomplete="off" placeholder="Start typing your city" />
-          <button id="change-city" type="button" class="ghost-btn hidden">Change</button>
+    <div id="region-language-wrapper">
+      <section id="onboarding-step1" class="mission-screen">
+        <button id="region-overlay-close" class="overlay-close ghost-btn hidden" type="button" aria-label="Close">
+          ✕
+        </button>
+        <h2>Welcome on board</h2>
+        <p class="mission-subtitle">Choose your city and language to personalise the mission briefing.</p>
+        <div class="city-picker glass card">
+          <label for="city-input">Your city</label>
+          <div class="city-input-wrapper">
+            <input id="city-input" type="text" autocomplete="off" placeholder="Start typing your city" />
+            <button id="change-city" type="button" class="ghost-btn hidden">Change</button>
+          </div>
+          <ul id="city-suggestions" class="city-suggestions"></ul>
+          <div id="city-confirmed" class="selection-hint hidden">City selected</div>
         </div>
-        <ul id="city-suggestions" class="city-suggestions"></ul>
-        <div id="city-confirmed" class="selection-hint hidden">City selected</div>
-      </div>
-      <div class="language-picker glass card">
-        <h3>Choose your language</h3>
-        <div id="language-options" class="language-options">
-          <button class="language-option" type="button" data-language="en">
-            <img src="assets/images/Flag_of_the_United_States_and_United_Kingdom.png" alt="English" />
-            <span>ENG</span>
-          </button>
-          <button class="language-option" type="button" data-language="es">
-            <img src="assets/images/Flag_of_Spain_and_Mexico.png" alt="Español" />
-            <span>ESP</span>
-          </button>
-          <button class="language-option" type="button" data-language="pt">
-            <img src="assets/images/Flags_of_Brazil_and_Portugal.png" alt="Português" />
-            <span>PTG</span>
-          </button>
-          <button class="language-option" type="button" data-language="fr">
-            <img src="assets/images/Flag_of_Canada_and_France.png" alt="Français" />
-            <span>FRA</span>
-          </button>
+        <div class="language-picker glass card">
+          <h3>Choose your language</h3>
+          <div id="language-options" class="language-options">
+            <button class="language-option" type="button" data-language="en">
+              <img src="assets/images/Flag_of_the_United_States_and_United_Kingdom.png" alt="English" />
+              <span>ENG</span>
+            </button>
+            <button class="language-option" type="button" data-language="es">
+              <img src="assets/images/Flag_of_Spain_and_Mexico.png" alt="Español" />
+              <span>ESP</span>
+            </button>
+            <button class="language-option" type="button" data-language="pt">
+              <img src="assets/images/Flags_of_Brazil_and_Portugal.png" alt="Português" />
+              <span>PTG</span>
+            </button>
+            <button class="language-option" type="button" data-language="fr">
+              <img src="assets/images/Flag_of_Canada_and_France.png" alt="Français" />
+              <span>FRA</span>
+            </button>
+          </div>
         </div>
-      </div>
-      <div id="step1-error" class="error hidden"></div>
-      <button id="step1-next" class="primary-btn wide">Continue</button>
-    </section>
+        <div id="step1-error" class="error hidden"></div>
+        <button id="step1-next" class="primary-btn wide">Continue</button>
+      </section>
+    </div>
 
     <div id="mission-progress" class="mission-progress hidden">
       <span class="mission-dot" data-step="1"></span>
@@ -110,6 +115,16 @@
     </section>
 
     <section id="mission-step4" class="mission-screen hidden">
+      <div class="onboarding-progress-checklist glass card">
+        <label class="progress-check completed">
+          <span class="progress-box" aria-hidden="true"></span>
+          <span class="progress-label" data-i18n="onboarding_progress_watch">Watch stories</span>
+        </label>
+        <label class="progress-check current">
+          <span class="progress-box" aria-hidden="true"></span>
+          <span class="progress-label" data-i18n="onboarding_progress_enter">Enter data</span>
+        </label>
+      </div>
       <h2>Log the findings</h2>
       <p class="mission-text">Stories watched. Share your proof to unlock the next phase.</p>
       <label for="mission-reel-link">Paste your Reels link</label>
