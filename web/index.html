@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Reels Exchange">
-  <title data-i18n="app_title">Instagram Reels Exchange</title>
-  <!-- Подключаем сначала основные стили, затем анимации -->
+  <meta name="stories-account-url" content="https://www.instagram.com/" />
+  <title>Instagram Reels Exchange</title>
   <link rel="stylesheet" href="assets/styles/liquid-glass.css">
   <link rel="stylesheet" href="assets/styles/animations.css">
   <link rel="stylesheet" href="assets/styles/ios26-progress.css">
@@ -16,16 +16,15 @@
 </head>
 <body>
   <div id="app">
-    <!-- Introduction screen -->
     <div id="intro-screen" class="intro-screen">
-      <h1 class="intro-title" data-i18n="app_title">Instagram Reels Exchange</h1>
+      <h1 class="intro-title">Instagram Reels Exchange</h1>
     </div>
+
     <header class="glass card">
       <div class="header-content">
-        <h1 data-i18n="app_title">Instagram Reels Exchange</h1>
-        <!-- Theme toggle switch with label -->
+        <h1>Instagram Reels Exchange</h1>
         <div class="theme-switch-wrapper">
-          <span class="theme-label" data-i18n="theme_label">Theme</span>
+          <span class="theme-label">Theme</span>
           <label class="theme-switch" for="checkbox">
             <input type="checkbox" id="checkbox" />
             <div class="slider"></div>
@@ -33,195 +32,225 @@
         </div>
       </div>
     </header>
-    <!-- tooltip overlay -->
-    <div id="tooltip-overlay" class="overlay hidden">
-      <div class="tooltip-box glass card">
-        <p id="tooltip-text"></p>
-        <button id="tooltip-ok" class="primary-btn">OK</button>
+
+    <div id="stories-modal" class="overlay hidden">
+      <div class="stories-modal glass card">
+        <div class="stories-modal__header">
+          <h2>Watch stories</h2>
+          <button id="stories-modal-close" type="button" class="ghost-btn" aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <p class="stories-modal__text">
+          This short guide shows how to find the secret code inside the first Instagram account. Tap the button below to open stories.
+        </p>
+        <label class="checkbox-row">
+          <input type="checkbox" id="stories-modal-hide" />
+          <span>Don't show this window again</span>
+        </label>
+        <button id="stories-modal-open" class="primary-btn">Open stories</button>
       </div>
     </div>
-    <!-- progress bar with three segments - iOS 26 style -->
-    <div class="progress-container-ios26">
-      <div class="progress-segment-ios26" data-step="1"></div>
-      <div class="progress-segment-ios26" data-step="2"></div>
-      <div class="progress-segment-ios26" data-step="3"></div>
-    </div>
-    <!-- Step 1 -->
-    <section id="step1" class="screen">
-      <div class="screen-header">
-        <h2 data-i18n="step1_title"></h2>
-        <button class="help-btn" data-tooltip="tooltip_step1">?</button>
+
+    <section id="onboarding-step1" class="mission-screen">
+      <h2>Welcome on board</h2>
+      <p class="mission-subtitle">Choose your city and language to personalise the mission briefing.</p>
+      <div class="city-picker glass card">
+        <label for="city-input">Your city</label>
+        <div class="city-input-wrapper">
+          <input id="city-input" type="text" autocomplete="off" placeholder="Start typing your city" />
+          <button id="change-city" type="button" class="ghost-btn hidden">Change</button>
+        </div>
+        <ul id="city-suggestions" class="city-suggestions"></ul>
+        <div id="city-confirmed" class="selection-hint hidden">City selected</div>
       </div>
-      <div class="form-group">
-        <label for="region-select" data-i18n="region_label"></label>
-        <select id="region-select" class="glass input">
-          <option value="" disabled selected data-i18n="select_region">Select region</option>
-          <option value="USA" data-i18n-option="region_option_usa">USA</option>
-          <option value="Mexico" data-i18n-option="region_option_mexico">Mexico</option>
-          <option value="Canada" data-i18n-option="region_option_canada">Canada</option>
-          <option value="BRAZIL" data-i18n-option="region_option_brazil">Brazil</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="language-select" data-i18n="language_label"></label>
-        <select id="language-select" class="glass input">
-          <option value="" disabled selected data-i18n="select_language">Select language</option>
-          <option value="en" data-i18n-option="language_option_en">English</option>
-          <option value="es" data-i18n-option="language_option_es">Español</option>
-          <option value="fr" data-i18n-option="language_option_fr">Français</option>
-          <option value="pt" data-i18n-option="language_option_pt">Português</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="timezone-select" data-i18n="timezone_label">Time zone (UTC)</label>
-        <select id="timezone-select" class="glass input">
-          <option value="" disabled selected data-i18n="select_timezone">Select time zone</option>
-          <option value="UTC-10:00">UTC-10:00</option>
-          <option value="UTC-09:00">UTC-09:00</option>
-          <option value="UTC-08:00">UTC-08:00</option>
-          <option value="UTC-07:00">UTC-07:00</option>
-          <option value="UTC-06:00">UTC-06:00</option>
-          <option value="UTC-05:00">UTC-05:00</option>
-          <option value="UTC-04:00">UTC-04:00</option>
-          <option value="UTC-03:30">UTC-03:30</option>
-          <option value="UTC-03:00">UTC-03:00</option>
-          <option value="UTC-02:30">UTC-02:30</option>
-          <option value="UTC-02:00">UTC-02:00</option>
-          <option value="UTC-01:00">UTC-01:00</option>
-          <option value="UTC+00:00">UTC±00:00</option>
-          <option value="UTC+01:00">UTC+01:00</option>
-          <option value="UTC+02:00">UTC+02:00</option>
-          <option value="UTC+03:00">UTC+03:00</option>
-        </select>
+      <div class="language-picker glass card">
+        <h3>Choose your language</h3>
+        <div id="language-options" class="language-options">
+          <button class="language-option" type="button" data-language="en">
+            <img src="assets/images/Flag_of_the_United_States_and_United_Kingdom.png" alt="English" />
+            <span>ENG</span>
+          </button>
+          <button class="language-option" type="button" data-language="es">
+            <img src="assets/images/Flag_of_Spain_and_Mexico.png" alt="Español" />
+            <span>ESP</span>
+          </button>
+          <button class="language-option" type="button" data-language="pt">
+            <img src="assets/images/Flags_of_Brazil_and_Portugal.png" alt="Português" />
+            <span>PTG</span>
+          </button>
+          <button class="language-option" type="button" data-language="fr">
+            <img src="assets/images/Flag_of_Canada_and_France.png" alt="Français" />
+            <span>FRA</span>
+          </button>
+        </div>
       </div>
       <div id="step1-error" class="error hidden"></div>
-      <button id="step1-next" class="primary-btn" data-i18n="next_button"></button>
+      <button id="step1-next" class="primary-btn wide">Continue</button>
     </section>
-    <!-- Step 2 -->
-    <section id="step2" class="screen hidden">
-      <div class="screen-header">
-        <h2 data-i18n="step2_title"></h2>
-        <button class="help-btn" data-tooltip="tooltip_step2">?</button>
-      </div>
-      <p data-i18n="instructions_text"></p>
-      <a id="goto-link" href="https://www.instagram.com/" target="_blank" class="link" data-i18n="go_to_search"></a>
-      <div id="step2-error" class="error hidden"></div>
-      <button id="step2-next" class="primary-btn" data-i18n="next_button"></button>
-    </section>
-    <!-- Step 3 -->
-    <section id="step3" class="screen hidden">
-      <div class="screen-header">
-        <h2 data-i18n="step3_title"></h2>
-        <button class="help-btn" data-tooltip="tooltip_step3">?</button>
-      </div>
-      <div class="form-group">
-        <label for="reel-link" data-i18n="reels_link_label"></label>
-        <!-- Улучшенные атрибуты для мобильных устройств -->
-        <input type="url" id="reel-link" class="glass input" placeholder="https://www.instagram.com/reel/..." 
-               inputmode="url" enterkeyhint="done" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false" 
-               pattern="https://www\.instagram\.com/reel/.+" title="Please enter a valid Instagram Reels link" />
-      </div>
-      <div class="form-group">
-        <label for="code-inputs" data-i18n="code_label"></label>
-        <!-- Полностью переделанные поля ввода кода без зеленых окошек -->
-        <div id="code-inputs" class="code-inputs-container">
-          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
-                 autocomplete="one-time-code" title="Enter a single digit" />
-          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
-                 autocomplete="one-time-code" title="Enter a single digit" />
-          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
-                 autocomplete="one-time-code" title="Enter a single digit" />
-          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
-                 autocomplete="one-time-code" title="Enter a single digit" />
-          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
-                 autocomplete="one-time-code" title="Enter a single digit" />
-          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
-                 autocomplete="one-time-code" title="Enter a single digit" />
-          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
-                 autocomplete="one-time-code" title="Enter a single digit" />
-          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
-                 autocomplete="one-time-code" title="Enter a single digit" />
-          <input type="tel" pattern="[0-9]" inputmode="numeric" maxlength="1" class="code-digit" 
-                 autocomplete="one-time-code" title="Enter a single digit" />
-        </div>
-        <!-- Подсказка для администратора -->
-        <div class="admin-hint" style="text-align: center; margin-top: 8px; font-size: 0.8rem; color: var(--text-secondary);">
-          Для администратора: введите 123456789 чтобы пропустить проверку
-        </div>
-      </div>
-      <!-- Add the "Back to Stories" link styled like "Go to code search" -->
-      <a id="back-to-stories" href="https://www.instagram.com/" target="_blank" class="link" data-i18n="back_to_stories">Back to Stories</a>
-      <div id="step3-error" class="error hidden"></div>
-      <button id="step3-submit" class="primary-btn" data-i18n="get_views_button">Get views</button>
-    </section>
-    <!-- Bottom Navigation Menu -->
-    <nav id="bottom-menu" class="bottom-menu hidden glass card">
-      <button class="menu-btn" data-view="referral" data-i18n="menu_referral"></button>
-      <button class="menu-btn" data-view="profile" data-i18n="menu_profile"></button>
-      <button class="menu-btn" data-view="leaderboard" data-i18n="menu_leaderboard"></button>
-    </nav>
-    <!-- Success overlay: shows after submission instead of a separate screen -->
-    <div id="success-overlay" class="overlay hidden">
-      <div class="success-box glass card">
-        <h2 data-i18n="success_title"></h2>
-        <p data-i18n="success_message"></p>
-        <button id="success-ok" class="primary-btn" data-i18n="ok_button"></button>
-      </div>
+
+    <div id="mission-progress" class="mission-progress hidden">
+      <span class="mission-dot" data-step="1"></span>
+      <span class="mission-dot" data-step="2"></span>
+      <span class="mission-dot" data-step="3"></span>
     </div>
-    <!-- Referral View -->
-    <section id="referral-view" class="menu-view hidden glass card">
-      <h2 data-i18n="referral_title"></h2>
-      <p data-i18n="referral_description"></p>
-      <input type="text" id="referral-link" readonly class="glass input" />
-      <p id="referral-count" class="referral-count"></p>
-      <div class="referral-actions">
-        <button id="copy-referral" class="secondary-btn" data-i18n="copy_link"></button>
-        <button id="send-referral" class="secondary-btn" data-i18n="send_contact"></button>
+
+    <section id="mission-step2" class="mission-screen hidden">
+      <h2>Mission launch</h2>
+      <div class="status-board glass card">
+        <div class="board-row">
+          <span class="label">Uploaded Reels</span>
+          <span id="board-reels-count" class="value">0 / 1500</span>
+        </div>
+        <div class="board-row">
+          <span class="label">Spots taken</span>
+          <span id="board-spots-count" class="value">0 / 500</span>
+        </div>
+        <div class="board-row">
+          <span class="label">Premium queue</span>
+          <span id="board-premium-count" class="value">0</span>
+        </div>
       </div>
+      <p class="mission-text">Your Reels will talk to the algorithm. Take the first action to join the queue.</p>
+      <button id="open-stories-trigger" class="primary-btn wide">Find CODE in stories</button>
+      <p class="mission-note">Menu buttons stay locked until the mission is completed.</p>
     </section>
-    <!-- Profile View -->
-    <section id="profile-view" class="menu-view hidden glass card">
-      <h2 data-i18n="profile_heading"></h2>
-      <!-- User card -->
-      <div class="profile-block user-block glass">
-        <img id="profile-avatar" src="" alt="avatar" class="avatar" />
-        <span id="profile-nickname" class="nickname"></span>
+
+    <section id="mission-step4" class="mission-screen hidden">
+      <h2>Log the findings</h2>
+      <p class="mission-text">Stories watched. Share your proof to unlock the next phase.</p>
+      <label for="mission-reel-link">Paste your Reels link</label>
+      <input type="url" id="mission-reel-link" class="glass input" placeholder="https://www.instagram.com/reel/..."
+             inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false" />
+      <p class="hint">Example: https://www.instagram.com/reel/ABC123/</p>
+      <label for="mission-code">Enter nine-digit code</label>
+      <input type="tel" id="mission-code" class="glass input code-field" maxlength="9" pattern="\d{9}"
+             inputmode="numeric" placeholder="000000000" />
+      <div id="mission-step4-error" class="error hidden"></div>
+      <button id="launch-reel-btn" class="primary-btn wide">Run Reel</button>
+      <button id="reopen-stories" class="secondary-btn wide">Open stories again</button>
+    </section>
+
+    <section id="mission-step5" class="mission-screen hidden">
+      <h2>Success!</h2>
+      <p class="mission-text">Your Reel is already getting views.</p>
+      <div id="advice-card" class="advice-card glass card" role="button" tabindex="0">
+        <span class="advice-title">Useful advice</span>
+        <span id="advice-text" class="advice-text">Tap to discover more tips.</span>
       </div>
-      <!-- Balance card -->
-      <div class="profile-block balance-block glass">
-        <div class="balance-info">
-          <p class="balance-title" data-i18n="balance_title"></p>
-          <p id="balance-today" class="balance-today"></p>
+      <button id="go-to-menu-btn" class="primary-btn wide">Go to menu</button>
+    </section>
+
+    <nav id="bottom-menu" class="bottom-menu hidden glass card locked">
+      <button class="menu-btn" data-view="faq">
+        <span class="menu-icon">❓</span>
+        <span>FAQ</span>
+      </button>
+      <button class="menu-btn" data-view="profile">
+        <span class="menu-icon">👤</span>
+        <span>Profile</span>
+      </button>
+      <button class="menu-btn" data-view="referral">
+        <span class="menu-icon">🤝</span>
+        <span>Referral</span>
+      </button>
+    </nav>
+
+    <section id="faq-view" class="menu-view hidden glass card">
+      <h2>Contact SUPPORT</h2>
+      <p class="mission-subtitle">Useful advices:</p>
+      <div id="faq-accordion" class="faq-accordion">
+        <div class="faq-item">
+          <button class="faq-question">How does the algorithm find my Reel?</button>
+          <div class="faq-answer">
+            <p>We analyse the quality of your Reel and match it with the right audience using machine learning models trained on trending content.</p>
+          </div>
         </div>
-        <div id="balance-points" class="balance-points"></div>
-      </div>
-      <!-- Reel card -->
-      <div class="profile-block reel-block glass">
-        <div class="reel-header">
-          <p class="reel-title" data-i18n="your_reel_title"></p>
-          <button id="edit-reel-link" type="button" class="secondary-btn btn-compact" data-i18n="edit_reel_button"></button>
+        <div class="faq-item">
+          <button class="faq-question">What is the 9 digit code?</button>
+          <div class="faq-answer">
+            <p>The code confirms that you watched the onboarding stories. Each mission comes with a unique code hidden inside the story set.</p>
+          </div>
         </div>
-        <a id="profile-link" class="reel-link placeholder" href="#" target="_blank" rel="noopener noreferrer">Insert the link to your reel</a>
-        <p id="profile-status" class="reel-status"></p>
-        <div id="reel-edit-panel" class="reel-edit-panel hidden">
-          <label for="profile-link-input" data-i18n="reels_link_label"></label>
-          <input type="url" id="profile-link-input" class="glass input" placeholder="https://www.instagram.com/reel/..."
-                 inputmode="url" enterkeyhint="done" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false"
-                 pattern="https://www\.instagram\.com/reel/.+" title="Please enter a valid Instagram Reels link" />
-          <div id="reel-edit-error" class="error hidden"></div>
-          <div class="reel-edit-actions">
-            <button id="cancel-reel-edit" type="button" class="secondary-btn btn-compact" data-i18n="cancel_button"></button>
-            <button id="save-reel-edit" type="button" class="primary-btn btn-compact" data-i18n="save_button"></button>
+        <div class="faq-item">
+          <button class="faq-question">When will I get the results?</button>
+          <div class="faq-answer">
+            <p>Analytics refresh every 24 hours. We will notify you in the mini app and via Telegram once the views start growing.</p>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question">How to upgrade to premium?</button>
+          <div class="faq-answer">
+            <p>Premium access unlocks additional Reel slots and priority moderation. Contact support to receive the payment link.</p>
           </div>
         </div>
       </div>
-      <!-- Logout button -->
-      <button id="logout-btn" class="primary-btn logout-btn" data-i18n="menu_logout">Logout</button>
+      <button id="contact-support" class="secondary-btn wide">Message support</button>
     </section>
-    <!-- Leaderboard View -->
-    <section id="leaderboard-view" class="menu-view hidden glass card">
-      <h2 data-i18n="leaderboard_title"></h2>
-      <ul id="leaderboard-list" class="leaderboard-list"></ul>
+
+    <section id="profile-view" class="menu-view hidden glass card">
+      <h2>Your mission profile</h2>
+      <div class="profile-block user-block glass">
+        <img id="profile-avatar" src="assets/images/placeholder_avatar.png" alt="avatar" class="avatar" />
+        <div class="profile-user-meta">
+          <span id="profile-nickname" class="nickname">@user</span>
+          <span id="profile-location" class="profile-location"></span>
+          <span id="profile-language" class="profile-language"></span>
+        </div>
+      </div>
+      <div class="profile-block balance-block glass">
+        <div class="balance-info">
+          <p class="balance-title">Daily bonus</p>
+          <p id="balance-today" class="balance-today">+0 today</p>
+        </div>
+        <div id="balance-points" class="balance-points">0 ⚡</div>
+      </div>
+      <div class="profile-block reels-grid">
+        <div class="reel-card glass" data-slot="1">
+          <div class="reel-card__header">
+            <span>Reel 1</span>
+            <button id="edit-reel-link" type="button" class="secondary-btn btn-compact">Edit</button>
+          </div>
+          <a id="profile-link" class="reel-link placeholder" href="#" target="_blank" rel="noopener noreferrer">Insert the link to your reel</a>
+          <p id="profile-status" class="reel-status">Status: pending</p>
+          <div id="reel-edit-panel" class="reel-edit-panel hidden">
+            <label for="profile-link-input">Reels link</label>
+            <input type="url" id="profile-link-input" class="glass input" placeholder="https://www.instagram.com/reel/..."
+                   inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false" />
+            <div id="reel-edit-error" class="error hidden"></div>
+            <div class="reel-edit-actions">
+              <button id="cancel-reel-edit" type="button" class="secondary-btn btn-compact">Cancel</button>
+              <button id="save-reel-edit" type="button" class="primary-btn btn-compact">Save</button>
+            </div>
+          </div>
+        </div>
+        <div id="premium-reel-2" class="reel-card glass hidden" data-slot="2">
+          <div class="reel-card__header">
+            <span>Reel 2</span>
+            <span class="badge">Premium</span>
+          </div>
+          <p class="reel-note">Upload another Reel to boost your exposure.</p>
+        </div>
+        <div id="premium-reel-3" class="reel-card glass hidden" data-slot="3">
+          <div class="reel-card__header">
+            <span>Reel 3</span>
+            <span class="badge">Premium</span>
+          </div>
+          <p class="reel-note">This slot unlocks priority distribution for premium members.</p>
+        </div>
+      </div>
+      <button id="logout-btn" class="primary-btn logout-btn">Logout</button>
+    </section>
+
+    <section id="referral-view" class="menu-view hidden glass card">
+      <h2>Refer friends</h2>
+      <p>Invite creators and earn bonus points.</p>
+      <input type="text" id="referral-link" readonly class="glass input" />
+      <p id="referral-count" class="referral-count"></p>
+      <div class="referral-actions">
+        <button id="copy-referral" class="secondary-btn">Copy link</button>
+        <button id="send-referral" class="secondary-btn">Share</button>
+      </div>
     </section>
   </div>
 </body>

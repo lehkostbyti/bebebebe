@@ -141,6 +141,10 @@ function normalizeUserRecord(record) {
   base.first_name = isNonEmptyString(base.first_name) ? base.first_name : '';
   base.photo_url = isNonEmptyString(base.photo_url) ? base.photo_url : '';
   base.region = isNonEmptyString(base.region) ? base.region : null;
+  base.city = isNonEmptyString(base.city) ? base.city : null;
+  base.country = isNonEmptyString(base.country) ? base.country : null;
+  base.city_label = isNonEmptyString(base.city_label) ? base.city_label : null;
+  base.timezone = isNonEmptyString(base.timezone) ? base.timezone : null;
   base.language = isNonEmptyString(base.language) ? base.language : null;
   base.utc_offset = isValidUtcOffset(base.utc_offset) ? base.utc_offset : null;
 
@@ -156,6 +160,8 @@ function normalizeUserRecord(record) {
   base.points_total = coerceNumber(base.points_total ?? base.points, 0);
   base.points_current = coerceNumber(base.points_current ?? base.points_total, 0);
   base.daily_points = coerceNumber(base.daily_points, 0);
+  base.reels_launched_total = coerceNumber(base.reels_launched_total, 0);
+  base.mission_progress = coerceNumber(base.mission_progress, 0);
 
   if (base.reels_link && !validReelLink(base.reels_link)) {
     base.reels_link = null;
@@ -163,6 +169,7 @@ function normalizeUserRecord(record) {
   base.reels_status = isNonEmptyString(base.reels_status) ? base.reels_status : 'pending';
 
   base.nine_digit_code = coerceBoolean(base.nine_digit_code, false);
+  base.stories_modal_hidden = coerceBoolean(base.stories_modal_hidden, false);
 
   base.updated_at = base.updated_at || nowIso();
   base.moderated_at = base.moderated_at || null;
@@ -188,6 +195,10 @@ function mergeUser(existing, incoming = {}) {
 
   // selections
   if (isNonEmptyString(incoming.region)) out.region = incoming.region;
+  if (isNonEmptyString(incoming.city)) out.city = incoming.city;
+  if (isNonEmptyString(incoming.country)) out.country = incoming.country;
+  if (isNonEmptyString(incoming.city_label)) out.city_label = incoming.city_label;
+  if (isNonEmptyString(incoming.timezone)) out.timezone = incoming.timezone;
   if (isNonEmptyString(incoming.language)) out.language = incoming.language;
   if (isValidUtcOffset(incoming.utc_offset)) out.utc_offset = incoming.utc_offset;
 
@@ -202,6 +213,8 @@ function mergeUser(existing, incoming = {}) {
   if (isFiniteNumber(incoming.points_total)) out.points_total = incoming.points_total;
   if (isFiniteNumber(incoming.points_current)) out.points_current = incoming.points_current;
   if (isFiniteNumber(incoming.daily_points)) out.daily_points = incoming.daily_points;
+  if (isFiniteNumber(incoming.reels_launched_total)) out.reels_launched_total = incoming.reels_launched_total;
+  if (isFiniteNumber(incoming.mission_progress)) out.mission_progress = incoming.mission_progress;
   // legacy mapping
   if (isFiniteNumber(incoming.points)) {
     out.points_total = incoming.points;
@@ -226,6 +239,9 @@ function mergeUser(existing, incoming = {}) {
   if ('nine_digit_code' in incoming) {
     out.nine_digit_code = coerceBoolean(incoming.nine_digit_code, out.nine_digit_code);
   }
+  if ('stories_modal_hidden' in incoming) {
+    out.stories_modal_hidden = coerceBoolean(incoming.stories_modal_hidden, out.stories_modal_hidden);
+  }
 
   // timestamps
   out.updated_at = nowIso();
@@ -234,6 +250,8 @@ function mergeUser(existing, incoming = {}) {
   out.points_total = coerceNumber(out.points_total, 0);
   out.points_current = coerceNumber(out.points_current, out.points_total);
   out.daily_points = coerceNumber(out.daily_points, 0);
+  out.reels_launched_total = coerceNumber(out.reels_launched_total, 0);
+  out.mission_progress = coerceNumber(out.mission_progress, 0);
   if (!Array.isArray(out.referrals)) out.referrals = [];
 
   return out;
