@@ -65,5 +65,8 @@
   "region_option_brazil": "🇧🇷 Brazil",
   "language_option_pt": "🇵🇹 Português",
   "timezone_label": "Time zone (UTC)",
-  "select_timezone": "Select time zone"
+  "select_timezone": "Select time zone",
+  "onboarding_progress_watch": "Watch stories",
+  "onboarding_progress_enter": "Enter data",
+  "referral_share_message": "Join me on Reels-hub and get lots of views on your videos {0}"
 }

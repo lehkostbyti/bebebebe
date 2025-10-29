@@ -65,5 +65,8 @@
   "cancel_button": "Cancelar",
   "edit_reel_button": "Editar link",
   "alert_reel_pending": "Ao atualizar o link do reel, o status voltará para Em análise.",
-  "error_reel_update": "Não foi possível atualizar o link do seu reel agora. Tente novamente."
+  "error_reel_update": "Não foi possível atualizar o link do seu reel agora. Tente novamente.",
+  "onboarding_progress_watch": "Ver Stories",
+  "onboarding_progress_enter": "Inserir dados",
+  "referral_share_message": "Junte-se a mim no Reels-hub e ganhe muitas visualizações nos seus vídeos {0}"
 }

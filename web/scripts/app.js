@@ -32,6 +32,7 @@
   let editingRegionLanguage = false;
   let cachedDailyCode = null;
   let cachedDailyCodeDate = null;
+  let regionOverlayKeyHandler = null;
 
   function getStoredTheme() {
     try {
@@ -897,6 +898,47 @@
     }
   }
 
+  function openRegionLanguageOverlay() {
+    const wrapper = document.getElementById('region-language-wrapper');
+    const step = document.getElementById('onboarding-step1');
+    const closeBtn = document.getElementById('region-overlay-close');
+    if (!wrapper || !step) return;
+    wrapper.classList.add('overlay-mode');
+    step.classList.remove('hidden');
+    step.scrollTop = 0;
+    if (closeBtn) {
+      closeBtn.classList.remove('hidden');
+    }
+    if (!regionOverlayKeyHandler) {
+      regionOverlayKeyHandler = (event) => {
+        if (event.key === 'Escape') {
+          closeRegionLanguageOverlay();
+          editingRegionLanguage = false;
+        }
+      };
+      document.addEventListener('keydown', regionOverlayKeyHandler);
+    }
+  }
+
+  function closeRegionLanguageOverlay({ forceHide = false } = {}) {
+    const wrapper = document.getElementById('region-language-wrapper');
+    const step = document.getElementById('onboarding-step1');
+    const closeBtn = document.getElementById('region-overlay-close');
+    if (!wrapper || !step) return;
+    wrapper.classList.remove('overlay-mode');
+    if (closeBtn) {
+      closeBtn.classList.add('hidden');
+    }
+    if (forceHide || hasCompletedOnboarding) {
+      step.classList.add('hidden');
+    }
+    step.scrollTop = 0;
+    if (regionOverlayKeyHandler) {
+      document.removeEventListener('keydown', regionOverlayKeyHandler);
+      regionOverlayKeyHandler = null;
+    }
+  }
+
   async function enterMainApp(initialView = 'profile', options = {}) {
     hideMissionScreens();
     enableMenuAccess(true);
@@ -1739,6 +1781,44 @@
     showMenuView('profile');
   }
 
+  function resolveReferralShareTemplate() {
+    const current = translations[currentLanguage] || {};
+    if (isValidString(current?.referral_share_message)) {
+      return current.referral_share_message;
+    }
+    const fallback = translations['en'] || {};
+    return fallback.referral_share_message || 'Join me on Reels-hub and get lots of views on your videos {0}';
+  }
+
+  function buildReferralShareMessage(link) {
+    const template = resolveReferralShareTemplate();
+    return template.replace('{0}', link);
+  }
+
+  function shareReferralLink(link) {
+    if (!isValidString(link)) return;
+    const message = buildReferralShareMessage(link);
+    if (navigator.share && typeof navigator.share === 'function') {
+      navigator.share({ text: message, url: link }).catch(err => {
+        if (err && err.name === 'AbortError') return;
+        console.warn('Native share failed', err);
+      });
+      return;
+    }
+    const encodedLink = encodeURIComponent(link);
+    const encodedText = encodeURIComponent(message);
+    const shareUrl = `https://t.me/share/url?url=${encodedLink}&text=${encodedText}`;
+    if (window.Telegram && Telegram.WebApp) {
+      try {
+        Telegram.WebApp.openTelegramLink(shareUrl);
+      } catch (e) {
+        window.open(shareUrl, '_blank', 'noopener');
+      }
+    } else {
+      window.open(shareUrl, '_blank', 'noopener');
+    }
+  }
+
   async function openReferralView() {
     const user = await ensureProfileData();
     const referralInput = document.getElementById('referral-link');
@@ -2009,18 +2089,26 @@
     if (profileChangeRegionBtn) {
       profileChangeRegionBtn.addEventListener('click', () => {
         editingRegionLanguage = true;
-        const bottomMenuEl = document.getElementById('bottom-menu');
-        if (bottomMenuEl) {
-          bottomMenuEl.classList.add('hidden');
-          bottomMenuEl.classList.add('locked');
+        openRegionLanguageOverlay();
+      });
+    }
+
+    const regionOverlayClose = document.getElementById('region-overlay-close');
+    if (regionOverlayClose) {
+      regionOverlayClose.addEventListener('click', () => {
+        closeRegionLanguageOverlay();
+        editingRegionLanguage = false;
+      });
+    }
+
+    const regionLanguageWrapper = document.getElementById('region-language-wrapper');
+    if (regionLanguageWrapper) {
+      regionLanguageWrapper.addEventListener('click', (event) => {
+        if (!regionLanguageWrapper.classList.contains('overlay-mode')) return;
+        if (event.target === regionLanguageWrapper) {
+          closeRegionLanguageOverlay();
+          editingRegionLanguage = false;
         }
-        const progressEl = document.getElementById('mission-progress');
-        if (progressEl) {
-          progressEl.classList.add('hidden');
-        }
-        showMissionScreen('onboarding-step1');
-        updateMissionDots(0);
-        enableMenuAccess(false);
       });
     }
 
@@ -2195,6 +2283,7 @@
       await refreshGlobalStats();
 
       if (editingRegionLanguage) {
+        closeRegionLanguageOverlay({ forceHide: true });
         editingRegionLanguage = false;
         await enterMainApp('profile', { refreshProfile: true });
         return;
@@ -2206,11 +2295,14 @@
     }
 
     async function proceedToStories() {
-      await persistMissionState({ mission_progress: 1, stories_modal_hidden: storiesModalDismissed });
       showMissionScreen('mission-step4');
       updateMissionDots(2);
       enableMenuAccess(false);
       openStoriesLink();
+      const persistResult = await persistMissionState({ mission_progress: 1, stories_modal_hidden: storiesModalDismissed });
+      if (!persistResult.ok) {
+        console.warn('Failed to persist mission state before opening stories', persistResult.error);
+      }
     }
 
     if (step1Btn) {
@@ -2387,11 +2479,7 @@
     if (sendBtn) {
       sendBtn.addEventListener('click', () => {
         const link = document.getElementById('referral-link')?.value || '';
-        if (window.Telegram && Telegram.WebApp) {
-          Telegram.WebApp.openTelegramLink(link);
-        } else {
-          window.open(link, '_blank', 'noopener');
-        }
+        shareReferralLink(link);
       });
     }
 
